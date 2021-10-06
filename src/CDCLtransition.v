@@ -4,43 +4,39 @@
 
 *)
 
-Inductive Literal (V : Set) : Set :=
-  | pos : V -> Literal V
-  | neg : V -> Literal V.
-
-  
-Definition Assignment (V:Set) := V -> bool.
-
-(* Let's try an easy definition 
-  on partial assignment first *)
-Definition PAssignment (V:Set) := V -> option bool.
-
-(* Assignment Stack records the decision point and partial assignment *)
-Definition AssignmentStack (V: Set) := list ( (list (Literal V)) * PAssignment V).
-(* The invariant include the later one must 
-    have consistent assignment as the
-    former ones
-*)
-
-
-Definition Clause (V : Set) := list (Literal V).
-(* ListSet of Literals *)
-Definition CNF (V: Set) := list (Clause V).
-(* ListSet of CNF *)
-
-Definition ClauseByAssignment {V} (c : Clause V)  (a : Assignment V): bool.
-Admitted.
-Definition ClauseByPAssignment {V} (c : Clause V) (a : PAssignment V): option bool.
-Admitted.
-
-Definition CNFByAssignment {V} (c : CNF V)  (a : Assignment V): bool.
-Admitted.
-Definition CNFByPAssignment {V} (c : CNF V) (a : PAssignment V): option bool.
-Admitted.
-
 
 Open Scope type_scope.
 Open Scope list_scope.
+
+
+
+(* Assignment Stack records the decision point and partial assignment *)
+(* The first PAssignment V is the guessed literal, the second is deduced literals *)
+(* Definition AssignmentStack (V: Set) := list ( PAssignment V * PAssignment V). *)
+(* We make it inductive type so that we have *)
+Inductive AssignmentStack {V:Set} : PAssignment V -> PAssignment V -> Set :=
+  | empty_as : AssignmentStack ∅ ∅
+  | guess_as : forall 
+  | deduce_as :
+(* The invariant include the later one must 
+  have consistent assignment as the
+  former ones
+*)
+
+Definition LiteralsForm {V} (pa : PAssignment V) : Formula V. 
+Admitted.
+
+
+Definition RProofInv {V} 
+    (orginal : Formula V) 
+    (guessedLiterals deducedLiterals: PAssignment V) := 
+    RProof (conj orginal (LiteralsForm guessedLiterals)) (LiteralsForm deducedLiterals).  
+
+Fixpoint RProofInvAStack {V}
+    (original : Formula V)
+    (astack : AssignmentStack V) : Prop := 
+  match astack with
+  | 
 
 Definition CDCLState {V : Set} :=  (AssignmentStack V) * (CNF V). 
 
@@ -77,4 +73,8 @@ Inductive step {V : Set}: CDCLstate -> CDCLstate -> Prop :=
   | unit_prop :
       step (phi, M, ()) 
 
+
+Proposition step_with_proof:
+  forall x y,
+    step (astack, fx) (bstack, fy) ->
 

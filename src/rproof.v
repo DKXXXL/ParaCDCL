@@ -5,6 +5,9 @@ Inductive Literal (V : Set) : Set :=
 | pos : V -> Literal V
 | neg : V -> Literal V.
 
+
+
+
 Inductive Formula (V: Set) : Set :=
 | lit  : Literal V -> Formula V
 | conj : Formula V -> Formula V -> Formula V
@@ -68,7 +71,18 @@ Definition FormulaByPAssignment {V} (c : Formula V) (a : PAssignment V): option 
 Admitted.
 
 
-Definition 
+(*
+The real RProof we need:
+1. the consequent part we always need to prove conjunction of literals
+2. the antecedent part is always a CNF
+3. we can use an empty conjunction of literals to indicate a bottom
+4. during backjump, we need to prove N ⊧ Clause v L', this
+  is equivalent as N & (¬ L') ⊧ Clause
+So RProof is always a CNF => Conjunction of literals
+5. during the state transition, there are a lot of places
+  asking for "C is false under M",
+  during the coq algorithm, we will make
+*)
 
 Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
   | id : forall x, RProof x x
@@ -77,9 +91,9 @@ Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
       RProof y z ->
       RProof x z
   | res : forall 
-      RProof (conj N (disj C L)) M ->
+      RProof M (disj C L) ->
       RProof M (neg C)
-      RProof (conj N (disj C L)) (conj M L) 
+      RProof M L 
   (* Used by Unit Propagation and backjump *)
   | weaken : forall X K Y,
       RProof X Y -> RProof (conj X K) Y 
@@ -90,6 +104,8 @@ Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
       RProof (conj X K) Y ->
       RProof Q K ->
       RProof (conj X Q) Y
+  | weaken3 :
+      RProof (conj X K) X
   | conj:
       RProof X Y ->
       RProof X Z ->

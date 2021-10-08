@@ -33,6 +33,7 @@ Inductive Formula (V: Set) : Set :=
 | fconj : Formula V -> Formula V -> Formula V
 | fdisj : Formula V -> Formula V -> Formula V
 | fneg  : Formula V -> Formula V
+| ftop  : Formula V
 | fbot  : Formula V
 .
 
@@ -41,6 +42,7 @@ Arguments flit {V}.
 Arguments fconj {V}.
 Arguments fdisj {V}.
 Arguments fneg {V}.
+Arguments ftop {V}.
 Arguments fbot {V}.
 
 Definition Assignment (V:Set) := V -> bool.
@@ -58,7 +60,7 @@ Definition addAssignment   {V : Set} `{EqDec_eq V} v b f : (V -> option bool) :=
 
 (* Make a trivial partial assignment inductively defined *)
 (* So that it is a finite/inductable partial assignment *)
-Inductive FiniteAssignment {V : Set} `{EqDec_eq V}: (V -> option bool) -> Prop :=
+Inductive FiniteAssignment {V : Set} `{EqDec_eq V}: (V -> option bool) -> Set :=
   | empty_fa : FiniteAssignment emptyAssignment
   | assign_fa : forall {f} (v : V) (b : bool), 
     FiniteAssignment f -> 
@@ -67,16 +69,16 @@ Inductive FiniteAssignment {V : Set} `{EqDec_eq V}: (V -> option bool) -> Prop :
 
 Hint Constructors FiniteAssignment Formula Literal.
 
-Definition PAssignment (V:Set) `{EqDec_eq V} := {f:V -> option bool | FiniteAssignment f}.
+Definition PAssignment (V:Set) `{EqDec_eq V} := {f:V -> option bool & FiniteAssignment f}.
 
-Definition PA {V:Set} `{EqDec_eq V} (f : PAssignment V) (v : V) := proj1_sig f v.
+Definition PA {V:Set} `{EqDec_eq V} (f : PAssignment V) (v : V) := projT1 f v.
 
 
-Definition empty_pa  {V: Set} `{EqDec_eq V}: PAssignment V := (exist _ emptyAssignment empty_fa).
+Definition empty_pa  {V: Set} `{EqDec_eq V}: PAssignment V := (existT _ emptyAssignment empty_fa).
 Definition assign_pa {V: Set} `{EqDec_eq V} (v : V) (b : bool) (fp : PAssignment V) (h : PA fp v = None): PAssignment V.
   destruct fp as ( f & p ). cbn in *.
   pose (addAssignment v b f) as f'.
-  exact (exist _ f' (assign_fa v b p h)).
+  exact (existT _ f' (assign_fa v b p h)).
 Defined.
 
 
@@ -122,6 +124,7 @@ Fixpoint FormulaByAssignment {V} (c : Formula V)  (s : Assignment V): bool:=
   | fconj a b => andb (rec a) (rec b)
   | fdisj a b => orb (rec a) (rec b)
   | fneg  a => negb (rec a)
+  | ftop    => true
   | fbot    => false
   end.
 Fixpoint FormulaByPAssignment {V: Set} `{EqDec_eq V} (c : Formula V) (s : PAssignment V): option bool :=
@@ -143,7 +146,9 @@ Fixpoint FormulaByPAssignment {V: Set} `{EqDec_eq V} (c : Formula V) (s : PAssig
       | Some a => Some (negb a)
       | _ => None 
       end
+  | ftop    => Some true
   | fbot    => Some false
+
   end.
 
 
@@ -163,6 +168,13 @@ So RProof is always a CNF => Conjunction of literals
 5. during the state transition, there are a lot of places
   asking for "C is false under M",
   during the coq algorithm, we will make
+*)
+
+(* We can prove the soundness of the following
+    using CDPT:
+    http://adam.chlipala.net/cpdt/html/Reflection.html
+
+    there is also other chapters about prove by reflection
 *)
 
 Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
@@ -226,7 +238,26 @@ Proposition RProoflSound:
     FormulaByAssignment (fdisj (fneg x) (flit y)) a = true.
 Admitted.
 
-Definition LiteralsForm {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Formula V. 
+Definition ToLiteral {V: Set} `{EqDec_eq V} v (b : bool) : Literal V :=
+  match b with 
+  | true => positive v
+  | false => negative v
+  end.
+
+Fixpoint LiteralsForm {V : Set} `{EqDec_eq V} {f} (fa : FiniteAssignment f) : Formula V :=
+  match fa with
+  | empty_fa => ftop
+  | assign_fa v b f' _ => fconj (flit (ToLiteral v b)) (LiteralsForm f')
+  end.
+
+Definition LiteralsFormPA {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Formula V :=
+  let (f, p) := pa 
+  in LiteralsForm p.
+
+(* Proposition LiteralsFormWf:
+  forall f (fa : FiniteAssignment f), *)
+    
+Fixpoint ClauseFormula {V : Set} `{EqDec_eq V} (c : Clause V): Formula V.
 Admitted.
 
 Fixpoint CNFFormula {V : Set} `{EqDec_eq V} (c : CNF V): Formula V.

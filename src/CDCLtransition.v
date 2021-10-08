@@ -12,11 +12,7 @@ Require Import Coq.Logic.Decidable.
 Open Scope type_scope.
 Open Scope list_scope.
 
-Definition ToLiteral {V: Set} `{EqDec_eq V} v (b : bool) : Literal V :=
-  match b with 
-  | true => positive v
-  | false => negative v
-  end.
+
 
 
 Notation "t '[' x ':=' s ']' h" := (assign_pa x s t h) (at level 201).
@@ -55,15 +51,22 @@ Inductive AssignmentStack {V:Set} `{EqDec_eq V} (f : CNF V) :
   former ones
 *)
 
+Hint Constructors AssignmentStack.
+
 Notation AS := AssignmentStack.
 
 
-Print eq_dec.
 
 Proposition AssignmentStackHasRProof:
   forall {V : Set} `{EqDec_eq V} (f : CNF V) g d s,
     AS f ((g,d)::s) ->
     RProof (fconj (CNFFormula f) (LiteralsForm g)) (LiteralsForm d).
+
+intros V H f g d s. 
+remember ((g, d) :: s) as s'.
+intros h. generalize dependent Heqs'.
+induction h; intros; eauto.
+
 Admitted.
 
 Proposition AssignmentStackCanWeaken:

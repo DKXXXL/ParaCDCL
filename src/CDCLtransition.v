@@ -3,12 +3,24 @@
   http://rg1-teaching.mpi-inf.mpg.de/autrea-ws17/script.pdf, P29
 
 *)
+Require Import src.rproof.
 
+Require Import Coq.Classes.Equivalence.
+Require Import Coq.Classes.EquivDec.
+Require Import Coq.Logic.Decidable.
 
 Open Scope type_scope.
 Open Scope list_scope.
 
+Definition ToLiteral {V: Set} `{EqDec_eq V} v (b : bool) : Literal V :=
+  match b with 
+  | true => positive v
+  | false => negative v
+  end.
 
+
+Notation "t '[' x ':=' s ']' h" := (assign_pa x s t h) (at level 201).
+Notation "∅" := empty_pa.
 
 (* Assignment Stack records the decision point and partial assignment *)
 (* The first PAssignment V is the guessed literal, the second is deduced literals *)
@@ -21,29 +33,37 @@ Maintain the invariance that
 (* We choose to use CNF to represent formula here
     but in the resolution proof we uses Formula V to represent formula
 *)
-Inductive AssignmentStack {V:Set} (f : CNF V) : 
+Inductive AssignmentStack {V:Set} `{EqDec_eq V} (f : CNF V) : 
   list (PAssignment V * PAssignment V) -> Set :=
-  | empty_as : AssignmentStack ∅ ∅
-  | guess_as : forall 
-  | deduce_as :
-  | change_goal : 
-
+  | empty_as : AssignmentStack f ((∅,∅)::nil)
+  | guess_as : forall {g} {d} x b {s},
+      AssignmentStack f ((g, d)::s) ->
+      forall (h : PA g x = None),
+      AssignmentStack f (((g[x := b]h), d)::(g,d)::s) 
+  | deduce_as : forall {g} {d} {s} x b,
+      AssignmentStack f ((g, d)::s) ->
+      forall (h : PA d x = None),
+      RProof (fconj (CNFFormula f) (LiteralsForm g)) (flit (ToLiteral x b)) ->
+      AssignmentStack f ((g, d[x := b]h)::s)
+  | change_goal : forall {g} {s},
+      AssignmentStack g s ->
+      RProof (CNFFormula f) (CNFFormula g) ->
+      AssignmentStack f s.  
 (* change_goal is used to implement learn and forget *)
 (* The invariant include the later one must 
   have consistent assignment as the
   former ones
 *)
 
-Notation "AS" := AssignmentStack.
+Notation AS := AssignmentStack.
 
-Definition LiteralsForm {V} (pa : PAssignment V) : Formula V. 
-Admitted.
 
+Print eq_dec.
 
 Proposition AssignmentStackHasRProof:
-  forall f g d,
-    AS f ((g,d):_) ->
-    RProof (conj f (LiteralsForm g)) (LiteralsForm d).
+  forall {V : Set} `{EqDec_eq V} (f : CNF V) g d s,
+    AS f ((g,d)::s) ->
+    RProof (fconj (CNFFormula f) (LiteralsForm g)) (LiteralsForm d).
 Admitted.
 
 Proposition AssignmentStackCanWeaken:

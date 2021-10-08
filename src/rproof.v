@@ -1,7 +1,22 @@
 Require Import Coq.Classes.Equivalence.
 Require Import Coq.Classes.EquivDec.
 Require Import Coq.Logic.Decidable.
+Require Import Coq.Logic.Eqdep_dec.
 (* Here we construct the relationship between  *)
+
+
+(* Copy from 
+https://www.cis.upenn.edu/~plclub/metalib/current/html/CoqEqDec.html
+*)
+
+Class EqDec_eq (A : Type) :=
+  eq_dec : forall (x y : A), {x = y} + {x <> y}.
+
+Instance EqDec_eq_of_EqDec {A: Type} `(@EqDec A eq eq_equivalence) : EqDec_eq A.
+  auto.
+Qed.
+
+
 
 
 Inductive Literal (V : Set) : Set :=
@@ -31,9 +46,10 @@ Arguments fbot {V}.
 Definition Assignment (V:Set) := V -> bool.
 
 Definition emptyAssignment {V : Set} : (V -> option bool) := fun _ => None.
-Definition addAssignment   {V : Set} `{EqDec V} v b f : (V -> option bool) :=
+
+Definition addAssignment   {V : Set} `{EqDec_eq V} v b f : (V -> option bool) :=
   fun k =>
-    match (equiv_dec k v) with
+    match (eq_dec k v) with
     | left _ => Some b
     | right _ => f k
     end.
@@ -42,7 +58,7 @@ Definition addAssignment   {V : Set} `{EqDec V} v b f : (V -> option bool) :=
 
 (* Make a trivial partial assignment inductively defined *)
 (* So that it is a finite/inductable partial assignment *)
-Inductive FiniteAssignment {V : Set} `{EqDec V}: (V -> option bool) -> Prop :=
+Inductive FiniteAssignment {V : Set} `{EqDec_eq V}: (V -> option bool) -> Prop :=
   | empty_fa : FiniteAssignment emptyAssignment
   | assign_fa : forall {f} (v : V) (b : bool), 
     FiniteAssignment f -> 
@@ -51,13 +67,13 @@ Inductive FiniteAssignment {V : Set} `{EqDec V}: (V -> option bool) -> Prop :=
 
 Hint Constructors FiniteAssignment Formula Literal.
 
-Definition PAssignment (V:Set) `{EqDec V} := {f:V -> option bool | FiniteAssignment f}.
+Definition PAssignment (V:Set) `{EqDec_eq V} := {f:V -> option bool | FiniteAssignment f}.
 
-Definition PA {V:Set} `{EqDec V} (f : PAssignment V) (v : V) := proj1_sig f v.
+Definition PA {V:Set} `{EqDec_eq V} (f : PAssignment V) (v : V) := proj1_sig f v.
 
 
-Definition empty_pa  {V: Set} `{EqDec V}: PAssignment V := (exist _ emptyAssignment empty_fa).
-Definition assign_pa {V: Set} `{EqDec V} (v : V) (b : bool) (fp : PAssignment V) (h : PA fp v = None): PAssignment V.
+Definition empty_pa  {V: Set} `{EqDec_eq V}: PAssignment V := (exist _ emptyAssignment empty_fa).
+Definition assign_pa {V: Set} `{EqDec_eq V} (v : V) (b : bool) (fp : PAssignment V) (h : PA fp v = None): PAssignment V.
   destruct fp as ( f & p ). cbn in *.
   pose (addAssignment v b f) as f'.
   exact (exist _ f' (assign_fa v b p h)).
@@ -80,7 +96,7 @@ Definition LiteralByAssignment {V : Set} (c : Literal V) (a : Assignment V) : bo
   | negative k => (negb (a k))
   end.
 
-Definition LiteralByPAssignment {V : Set} `{EqDec V} (c : Literal V) (a : PAssignment V) : option bool :=
+Definition LiteralByPAssignment {V : Set} `{EqDec_eq V} (c : Literal V) (a : PAssignment V) : option bool :=
   match c with
   | positive k => (PA a k)
   | negative k => match PA a k with 
@@ -91,12 +107,12 @@ Definition LiteralByPAssignment {V : Set} `{EqDec V} (c : Literal V) (a : PAssig
 
 Definition ClauseByAssignment {V} (c : Clause V)  (a : Assignment V): bool.
 Admitted.
-Definition ClauseByPAssignment {V : Set} `{EqDec V} (c : Clause V) (a : PAssignment V): option bool.
+Definition ClauseByPAssignment {V : Set} `{EqDec_eq V} (c : Clause V) (a : PAssignment V): option bool.
 Admitted.
 
 Definition CNFByAssignment {V} (c : CNF V)  (a : Assignment V): bool.
 Admitted.
-Definition CNFByPAssignment {V : Set} `{EqDec V} (c : CNF V) (a : PAssignment V): option bool.
+Definition CNFByPAssignment {V : Set} `{EqDec_eq V} (c : CNF V) (a : PAssignment V): option bool. 
 Admitted.
 
 Fixpoint FormulaByAssignment {V} (c : Formula V)  (s : Assignment V): bool:=
@@ -108,7 +124,7 @@ Fixpoint FormulaByAssignment {V} (c : Formula V)  (s : Assignment V): bool:=
   | fneg  a => negb (rec a)
   | fbot    => false
   end.
-Fixpoint FormulaByPAssignment {V: Set} `{EqDec V} (c : Formula V) (s : PAssignment V): option bool :=
+Fixpoint FormulaByPAssignment {V: Set} `{EqDec_eq V} (c : Formula V) (s : PAssignment V): option bool :=
   let rec c := FormulaByPAssignment c s in
   match c with 
   | flit  a => LiteralByPAssignment a s
@@ -189,7 +205,7 @@ Definition rproofByAssignment :=
     FormulaByAssignment (fdisj (fneg x) y) a.
 
 Definition rproofByPAssignment :=
-  fun {V : Set} `{EqDec V} {x : Formula V} {y} (h: RProof x y) (a : PAssignment V) => 
+  fun {V : Set} `{EqDec_eq V} {x : Formula V} {y} (h: RProof x y) (a : PAssignment V) => 
     FormulaByPAssignment (fdisj (fneg x) y) a.
 
 
@@ -208,4 +224,16 @@ Proposition RProoflSound:
   forall {V} {x : Formula V} {y}
     (h : RProofl x y) (a: Assignment V),
     FormulaByAssignment (fdisj (fneg x) (flit y)) a = true.
+Admitted.
+
+Definition LiteralsForm {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Formula V. 
+Admitted.
+
+Fixpoint CNFFormula {V : Set} `{EqDec_eq V} (c : CNF V): Formula V.
+Admitted.
+
+(* Well-defined-ness *)
+Theorem CNFFormulaWf:
+  forall f a,
+  CNFByAssignment f a = FormulaByAssignment (CNFFormula f) a.
 Admitted.

@@ -3,3 +3,7 @@
 *.vo
 *.vok
 *.vos
+*.d
+Makefile.coq
+CoqMakefile.conf
+*.json

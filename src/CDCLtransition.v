@@ -28,7 +28,12 @@ Maintain the invariance that
 *)
 (* We choose to use CNF to represent formula here
     but in the resolution proof we uses Formula V to represent formula
-*)
+The specfication for assignment stack is that
+  the invariance of 
+    {AS f ((g,d)::s) ->
+    RProof (fconj f g) d}
+  holds all the time 
+    *)
 Inductive AssignmentStack {V:Set} `{EqDec_eq V} (f : CNF V) : 
   list (PAssignment V * PAssignment V) -> Set :=
   | empty_as : AssignmentStack f ((∅,∅)::nil)
@@ -36,11 +41,13 @@ Inductive AssignmentStack {V:Set} `{EqDec_eq V} (f : CNF V) :
       AssignmentStack f ((g, d)::s) ->
       forall (h : PA g x = None) (h2 : PA d x = None),
       AssignmentStack f (((g[x := b]h), d[x:=b]h2)::(g,d)::s) 
+  (* Decide *)
   | deduce_as : forall {g} {d} {s} x b,
       AssignmentStack f ((g, d)::s) ->
       forall (h : PA d x = None),
       RProof (fconj (CNFFormula f) (LiteralsFormPA g)) (flit (ToLiteral x b)) ->
       AssignmentStack f ((g, d[x := b]h)::s).
+  (* Unit Prop *)
 (* change_goal is used to implement learn and forget *)
 (* The invariant include the later one must 
   have consistent assignment as the
@@ -130,12 +137,12 @@ end.
 Qed.
 
 Proposition AssignmentStackMonotoncity:
-  forall f t s,
+  forall {V: Set} `{EqDec_eq V} {f : CNF V} { t s},
   AS f (t::s) ->
   s <> nil ->
   AS f s.
 
-intros f t s. 
+intros V H f t s. 
 remember (t :: s) as s'.
 intros h.
 generalize dependent t. generalize dependent s.
@@ -146,6 +153,28 @@ repeat match goal with
   inversion h; subst; cbn in *
 end; try contradiction; eauto.
 Qed.
+
+Proposition AssignmentStackMonotoncity2:
+  forall {V: Set} `{EqDec_eq V} {f : CNF V} {k s},
+  AS f (k ++ s) ->
+  s <> nil ->
+  AS f s.
+
+intros V H f k.
+generalize dependent f.
+induction k; intros; subst; eauto.
+
+remember (t :: s) as s'.
+intros h.
+generalize dependent t. generalize dependent s.
+
+induction h; intros;
+repeat match goal with
+| [h : (?u :: ?v) = (?a :: ?b) |- _] =>
+  inversion h; subst; cbn in *
+end; try contradiction; eauto.
+Qed.
+
 
 Theorem change_goal:
   forall {V:Set} `{EqDec_eq V} {g} {s} (f : CNF V),
@@ -173,7 +202,6 @@ Fixpoint RProofInvAStack {V}
   match astack with
   | nil => *)
 
-(* Definition CDCLState {V : Set} :=  (AssignmentStack V) * (CNF V).  *)
 
 (* Note that 
   CDCL are really doing proof search for undecdiability proof
@@ -211,23 +239,65 @@ Definition FullPA {V : Set} `{EqDec_eq V}
    
 
 
+Corollary AssignmentStackGSubD2:
+  forall {V : Set} `{EqDec_eq V} {f : CNF V} {g d s},
+  AS f ((g, d) :: s) ->
+  forall v,
+    PA d v = None ->
+    PA g v = None.
+  intros V H f g d s h0 v hh.
+  pose (AssignmentStackGSubD h0) as h1.
+  destruct (PA g v) eqn:Heq2; subst; eauto.
+  pose (h1 _ _ Heq2) as h3.
+  rewrite h3 in hh; try inversion hh.
+Qed.
+    
 
-Definition SucceedState {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Prop := 
-  match s with
-  | nil => False
-  | (_, d) :: _ => CNFByPAssignment f d = Some true
+(* | guess_as : forall {g} {d} x b {s},
+AssignmentStack f ((g, d)::s) ->
+forall (h : PA g x = None) (h2 : PA d x = None),
+AssignmentStack f (((g[x := b]h), d[x:=b]h2)::(g,d)::s)  *)
+
+Definition make_guess {V : Set} `{EqDec_eq V} {f : CNF V} {g d s} x b 
+  (stack : AS f ((g, d)::s)) (h : PA d x = None) :
+  AS f (((g[x := b](AssignmentStackGSubD2 stack _ h)), d[x:=b] h)::(g,d)::s).
+  eauto.
+Defined.
+
+
+(* Now we should be able to construct the four basic methods
+    unit_propagation, decide, fail, backjump
+*)
+
+Definition VofLiteral {V : Set} (l : Literal V) : V :=
+  match l with
+  | positive x => x
+  | negative x => x
   end.
-  
 
+Definition PolarityofLiteral {V : Set} (l : Literal V) : bool :=
+  match l with
+  | positive x => true
+  | negative x => false
+  end.
 
-Definition FailedState {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Set :=
-  RProof (CNFFormula f) fbot.
+Definition unit_prop_AS_spec: forall {V : Set} `{EqDec_eq V} {l c g d s f x b},
+  (*
+    We later need to relax this - l doesn't have to be the first
+    term; l::c doesn't have to be the first term
+  *)
+  AS ((l::c)::f) ((g,d) :: s) -> 
+  x = VofLiteral l ->
+  b = PolarityofLiteral l ->
+  (* eval C under d = false -> *)
+  ClauseByPAssignment c d = Some false ->
+  (* PA d l = None -> *)
+  forall (h : PA d x = None),
+  AS ((l::c)::f) ((g,d[x := b]h) :: s).
+  intros. eauto.
 
-
-
-Definition FinalState {V : Set} `{EqDec_eq V} {f s} (st : AS f s) := FailedState st + {SucceedState st} .
-
-
+Definition decide_AS_spec:
+  AS f ((g,d) :: s) -> 
 
 (* We will have a non-determinism state transition machine
    We need to introduce monad to make/effect it "effect-free"
@@ -247,15 +317,48 @@ Definition FinalState {V : Set} `{EqDec_eq V} {f s} (st : AS f s) := FailedState
     N together with the guessing decision of literals 
         implies all the current literals 
 *)
-Inductive step {V : Set}: CDCLstate -> CDCLstate -> Prop :=
+
+
+Definition SucceedAS {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Prop := 
+    match s with
+    | nil => False
+    | (_, d) :: _ => CNFByPAssignment f d = Some true
+    end.
+  
+Definition FailedAS {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Set :=
+    RProof (CNFFormula f) fbot.
+
+Definition FinalAS {V : Set} `{EqDec_eq V} {f s} (st : AS f s) := FailedState st + {SucceedState st} .
+  
+
+
+(* A CDCL state targeting to solve formula f
+      g is the learned clauses
+      s is the current assignment stack
+*)
+(* Specification of step : CDCLState f -> CDCLState f -> Prop
+  1. step is terminating
+  2. if steps x y and SucceedState y  
+      then assignment from y can evaluate f into true
+  3. if steps x y and FailedState y
+      then I can extract RProof (CNFFormula f) fbot
+
+  I will relax proving 1, by only proving 1 
+    in the version of stepAS
+      (unless I have time later)
+  for 2 and 3, the correspondent in stepAS will also be proved
+    as lemma
+*)
+
+
+Definition CDCLState {V : Set} `{EqDec_eq V} (f : CNF V) :=  
+  {g & {s & (AS (f ++ g) s) * RProof (CNFFormula f) (CNFFormula g)} }. 
+
+
+Inductive step {V : Set} `{EqDec_eq V} {f : CNF V}: 
+  CDCLState f -> CDCLState f -> Prop := 
   | unit_prop :
-      step (phi, M, ()) 
-
-
-Proposition step_with_proof:
-  forall x y,
-    step (astack, fx) (bstack, fy) ->
-
+      step (existT _ (existT _ ))
 
 
 (* This is not so important but
@@ -282,14 +385,16 @@ Proposition Terminating:
 Admitted.
 
 
-(* The following are the extracted functions *)
+(* The following are the extracted functions 
+    has similar signature as step : CDCL f -> CDCL f -> Prop
+*)
 
-(* One step unit-prop *)
+(* One step unit-prop spec*)
 
-(* UnitProp until cannot *)
+(* UnitProp until cannot spec*)
 
-(* Guess One Literal *)
+(* Guess One Literal spec*)
 
-(* Check Failure *)
+(* Check Failure spec*)
 
-(* Back Jump *)
+(* Back Jump spec*)

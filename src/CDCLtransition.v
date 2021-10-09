@@ -39,12 +39,8 @@ Inductive AssignmentStack {V:Set} `{EqDec_eq V} (f : CNF V) :
   | deduce_as : forall {g} {d} {s} x b,
       AssignmentStack f ((g, d)::s) ->
       forall (h : PA d x = None),
-      RProof (fconj (CNFFormula f) (LiteralsForm g)) (flit (ToLiteral x b)) ->
-      AssignmentStack f ((g, d[x := b]h)::s)
-  | change_goal : forall {g} {s},
-      AssignmentStack g s ->
-      RProof (CNFFormula f) (CNFFormula g) ->
-      AssignmentStack f s.  
+      RProof (fconj (CNFFormula f) (LiteralsFormPA g)) (flit (ToLiteral x b)) ->
+      AssignmentStack f ((g, d[x := b]h)::s).
 (* change_goal is used to implement learn and forget *)
 (* The invariant include the later one must 
   have consistent assignment as the
@@ -56,36 +52,78 @@ Hint Constructors AssignmentStack.
 Notation AS := AssignmentStack.
 
 
+Theorem LiteralsFormPAcomm:
+  forall {V: Set} `{EqDec_eq V} {g} {x : V} {b} {h},
+    (LiteralsFormPA (g [x := b] h)) = fconj (flit (ToLiteral x b)) (LiteralsFormPA g).
+  intros V H g.
+  induction g; intros; cbn in *; eauto.
+Qed.
+
+
+Hint Constructors RProof.
+
 
 Proposition AssignmentStackHasRProof:
   forall {V : Set} `{EqDec_eq V} (f : CNF V) g d s,
     AS f ((g,d)::s) ->
-    RProof (fconj (CNFFormula f) (LiteralsForm g)) (LiteralsForm d).
+    RProof (fconj (CNFFormula f) (LiteralsFormPA g)) (LiteralsFormPA d).
 
 intros V H f g d s. 
 remember ((g, d) :: s) as s'.
-intros h. generalize dependent Heqs'.
-induction h; intros; eauto.
+intros h. 
+generalize dependent g. generalize dependent d. generalize dependent s.
+induction h; intros;
+repeat match goal with
+| [h : (?u :: ?v) = (?a :: ?b) |- _] =>
+  inversion h; subst; cbn in *
+end; 
+repeat rewrite LiteralsFormPAcomm;
+try (pose (IHh _ _ _ eq_refl)).
++ eauto. 
++ eapply rp_trans. eapply rp_comm_conj. eapply rp_weaken2.
+  eauto.
++ eapply rp_rconj; eauto.
+Qed.
+ 
 
-Admitted.
-
-Proposition AssignmentStackCanWeaken:
-  forall f g d,
-  AS f s ->
-  RProof h f ->
-  AS h s.
-Admitted.
 
 Proposition AssignmentStackMonotoncity:
-  forall f g d,
-  AS f (t:s) ->
+  forall f t s,
+  AS f (t::s) ->
+  s <> nil ->
   AS f s.
-Admitted.
 
-Definition RProofInv {V} 
+intros f t s. 
+remember (t :: s) as s'.
+intros h.
+generalize dependent t. generalize dependent s.
+
+induction h; intros;
+repeat match goal with
+| [h : (?u :: ?v) = (?a :: ?b) |- _] =>
+  inversion h; subst; cbn in *
+end; try contradiction; eauto.
+Qed.
+
+Theorem change_goal:
+  forall {V:Set} `{EqDec_eq V} {g} {s} (f : CNF V),
+    AssignmentStack g s ->
+    RProof (CNFFormula f) (CNFFormula g) ->
+    AssignmentStack f s.
+  intros V H g s f h.
+  generalize dependent f.
+  induction h; intros; subst; eauto.
+  pose (IHh _ H0). 
+  eapply deduce_as; [eauto | idtac].
+  eauto.
+Qed.
+
+
+
+Definition RProofInv {V : Set} `{EqDec_eq V} 
     (orginal : Formula V) 
     (guessedLiterals deducedLiterals: PAssignment V) := 
-    RProof (conj orginal (LiteralsForm guessedLiterals)) (LiteralsForm deducedLiterals).  
+    RProof (fconj orginal (LiteralsFormPA guessedLiterals)) (LiteralsFormPA deducedLiterals).  
 
 Fixpoint RProofInvAStack {V}
     (original : Formula V)

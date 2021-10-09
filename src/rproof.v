@@ -178,8 +178,8 @@ So RProof is always a CNF => Conjunction of literals
 *)
 
 Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
-  | id : forall x, RProof x x
-  | trans : forall x y z,
+  | rp_id : forall x, RProof x x
+  | rp_trans : forall x y z,
       RProof x y ->
       RProof y z ->
       RProof x z
@@ -195,22 +195,26 @@ Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
       RProof M (fneg C) ->
       RProof M L  *)
   (* Used by Unit Propagation and backjump *)
-  | weaken : forall X K,
+  | rp_weaken : forall X K,
       RProof (fconj X K) X
   (* Used by Unit Propagation and backjump 
       we need to collect one clause out in unit propagation
   *)
-  | weaken2 : forall X K Y,
+  | rp_weaken2 : forall X K Y,
       RProof X Y -> RProof (fconj K X) Y 
-  | weaken3 : forall X Y K,
+  | rp_weaken3 : forall X Y K,
       RProof X Y -> RProof (fconj K X) (fconj K Y)
   (* Used by Decide *)
-  | contra : forall N C,
+  | rp_contra : forall N C,
       RProof (fconj N (fconj C (fneg C))) fbot
-  | rconj: forall X Y Z,
+  | rp_trivial : forall X,
+      RProof X ftop
+  | rp_rconj: forall X Y Z,
       RProof X Y ->
       RProof X Z ->
-      RProof X (fconj Y Z).
+      RProof X (fconj Y Z)
+  | rp_comm_conj : forall A B C,
+    RProof (fconj A (fconj B C)) (fconj B (fconj A C)).
 
 Definition rproofByAssignment :=
   fun {V : Set} {x : Formula V} {y} (h: RProof x y) (a : Assignment V) => 
@@ -257,11 +261,17 @@ Definition LiteralsFormPA {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Formula
 (* Proposition LiteralsFormWf:
   forall f (fa : FiniteAssignment f), *)
     
-Fixpoint ClauseFormula {V : Set} `{EqDec_eq V} (c : Clause V): Formula V.
-Admitted.
+Fixpoint ClauseFormula {V : Set} `{EqDec_eq V} (c : Clause V): Formula V:=
+  match c with 
+  | nil => fbot 
+  | cons h t => fdisj (flit h) (ClauseFormula t) 
+  end.
 
-Fixpoint CNFFormula {V : Set} `{EqDec_eq V} (c : CNF V): Formula V.
-Admitted.
+Fixpoint CNFFormula {V : Set} `{EqDec_eq V} (c : CNF V): Formula V :=
+  match c with 
+  | nil => ftop 
+  | cons h t => fconj (ClauseFormula h) (CNFFormula t) 
+  end.
 
 (* Well-defined-ness *)
 Theorem CNFFormulaWf:

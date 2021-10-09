@@ -34,8 +34,8 @@ Inductive AssignmentStack {V:Set} `{EqDec_eq V} (f : CNF V) :
   | empty_as : AssignmentStack f ((∅,∅)::nil)
   | guess_as : forall {g} {d} x b {s},
       AssignmentStack f ((g, d)::s) ->
-      forall (h : PA g x = None),
-      AssignmentStack f (((g[x := b]h), d)::(g,d)::s) 
+      forall (h : PA g x = None) (h2 : PA d x = None),
+      AssignmentStack f (((g[x := b]h), d[x:=b]h2)::(g,d)::s) 
   | deduce_as : forall {g} {d} {s} x b,
       AssignmentStack f ((g, d)::s) ->
       forall (h : PA d x = None),
@@ -60,6 +60,16 @@ Theorem LiteralsFormPAcomm:
 Qed.
 
 
+Theorem PA_assign_comm:
+  forall {V: Set} `{EqDec_eq V} {g : PAssignment V} {x b v h},
+  PA (g [x := b] h) v =
+    if (eq_dec v x) then Some b else PA g v.
+  intros V h g.
+  destruct g as [fg fp].
+  induction fp; intros; cbn in *; eauto.
+Qed.
+
+
 Hint Constructors RProof.
 
 
@@ -80,12 +90,44 @@ end;
 repeat rewrite LiteralsFormPAcomm;
 try (pose (IHh _ _ _ eq_refl)).
 + eauto. 
-+ eapply rp_trans. eapply rp_comm_conj. eapply rp_weaken2.
++ eapply rp_trans. eapply rp_comm_conj. eapply rp_weaken3.
   eauto.
 + eapply rp_rconj; eauto.
 Qed.
  
 
+Theorem AssignmentStackGSubD:
+  forall {V : Set} `{EqDec_eq V} {f : CNF V} {g d s},
+  AS f ((g, d) :: s) ->
+  forall v T,
+    PA g v = Some T ->
+    PA d v = Some T.
+  intros V H f g d s.
+  remember ((g, d) :: s) as s'.
+  intros h.
+  generalize dependent g. generalize dependent d. generalize dependent s.
+  induction h; intros; eauto;
+  repeat match goal with
+  | [h : (?u :: ?v) = (?a :: ?b) |- _] =>
+  inversion h; subst; cbn in *
+  end; 
+eauto; 
+repeat rewrite PA_assign_comm in *;
+try match goal with 
+  | [h : PA (?g [?x := ?b ] ?h0) ?v = _ |- _] =>
+    rewrite PA_assign_comm in h
+end;
+match goal with 
+| [|- context[eq_dec ?a ?b]] =>
+  destruct (eq_dec a b); subst; eauto; try contradiction
+end.
+pose (IHh _ _ _ eq_refl _ _ H0) as Heqn.
+clear Heqs'.
+rewrite Heqn in *; 
+match goal with 
+| [h : Some _ = None |- _] => inversion h
+end.
+Qed.
 
 Proposition AssignmentStackMonotoncity:
   forall f t s,
@@ -119,7 +161,7 @@ Theorem change_goal:
 Qed.
 
 
-
+(* 
 Definition RProofInv {V : Set} `{EqDec_eq V} 
     (orginal : Formula V) 
     (guessedLiterals deducedLiterals: PAssignment V) := 
@@ -129,7 +171,7 @@ Fixpoint RProofInvAStack {V}
     (original : Formula V)
     (astack : AssignmentStack V) : Prop := 
   match astack with
-  | 
+  | nil => *)
 
 (* Definition CDCLState {V : Set} :=  (AssignmentStack V) * (CNF V).  *)
 
@@ -143,13 +185,47 @@ Fixpoint RProofInvAStack {V}
   | failst : forall a c, (CNFByPAssignment c a = Some false) -> FinalState (a::nil, c)
   | succeedst : forall a b c, (CNFByPAssignment c a = Some true) -> FinalState (a::b, c). *)
 
-Definition SucceedState := .
+Definition PeelOffPA {V : Set} `{EqDec_eq V} 
+  {pa : PAssignment V} (h : forall x, PA pa x <> None) : 
+  {f : V -> bool | forall x, PA pa x = Some (f x)}.
+  
+  refine 
+  (exist _ (fun v =>
+    match (PA pa v) with
+    | Some k =>  k
+    | None => true
+    end ) _).
+  intros. 
+  destruct (PA pa x) eqn:hc; eauto.
+  destruct (h _ hc).
+Qed.
+
+Definition FullPA {V : Set} `{EqDec_eq V} 
+{pa : PAssignment V} (h : forall x, PA pa x <> None) :
+  forall v, {result : bool | PA pa v = Some result } :=
+  fun v =>
+  let (fa, p2) := PeelOffPA h
+  in let result  := fa v
+  in  exist _ result (p2 v).
+
+   
 
 
-Definition FailedState {V : Set} (st : AS f s)
+
+Definition SucceedState {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Prop := 
+  match s with
+  | nil => False
+  | (_, d) :: _ => CNFByPAssignment f d = Some true
+  end.
+  
 
 
-Definition FinalState {V : Set} (st : AS f s) := SucceedState st \/ FailedState st.
+Definition FailedState {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Set :=
+  RProof (CNFFormula f) fbot.
+
+
+
+Definition FinalState {V : Set} `{EqDec_eq V} {f s} (st : AS f s) := FailedState st + {SucceedState st} .
 
 
 

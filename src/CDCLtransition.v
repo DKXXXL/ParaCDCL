@@ -164,15 +164,11 @@ intros V H f k.
 generalize dependent f.
 induction k; intros; subst; eauto.
 
-remember (t :: s) as s'.
-intros h.
-generalize dependent t. generalize dependent s.
-
-induction h; intros;
-repeat match goal with
-| [h : (?u :: ?v) = (?a :: ?b) |- _] =>
-  inversion h; subst; cbn in *
-end; try contradiction; eauto.
+rewrite <- List.app_comm_cons in *.
+eapply IHk; eauto.
+eapply AssignmentStackMonotoncity; eauto.
+intro hh.
+destruct (List.app_eq_nil _ _ hh); subst; try contradiction.
 Qed.
 
 
@@ -281,6 +277,11 @@ Definition PolarityofLiteral {V : Set} (l : Literal V) : bool :=
   | negative x => false
   end.
 
+Axiom rp_byassign:
+  forall ,
+  ClauseByPAssignment c d = Some false ->
+  RProof (LiteralsFormPA d) (ClauseFormula c)
+
 Definition unit_prop_AS_spec: forall {V : Set} `{EqDec_eq V} {l c g d s f x b},
   (*
     We later need to relax this - l doesn't have to be the first
@@ -294,7 +295,7 @@ Definition unit_prop_AS_spec: forall {V : Set} `{EqDec_eq V} {l c g d s f x b},
   (* PA d l = None -> *)
   forall (h : PA d x = None),
   AS ((l::c)::f) ((g,d[x := b]h) :: s).
-  intros. eauto.
+  intros. 
 
 Definition decide_AS_spec:
   AS f ((g,d) :: s) -> 

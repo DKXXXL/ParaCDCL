@@ -13,6 +13,14 @@ Open Scope type_scope.
 Open Scope list_scope.
 
 
+Section CDCLtransition.
+
+
+
+Context {V:Set}.
+
+Context {H: EqDec_eq V}.
+
 
 
 Notation "t '[' x ':=' s ']' h" := (assign_pa x s t h) (at level 201).
@@ -34,7 +42,7 @@ The specfication for assignment stack is that
     RProof (fconj f g) d}
   holds all the time 
     *)
-Inductive AssignmentStack {V:Set} `{EqDec_eq V} (f : CNF V) : 
+Inductive AssignmentStack (f : CNF V) : 
   list (PAssignment V * PAssignment V) -> Set :=
   | empty_as : AssignmentStack f ((∅,∅)::nil)
   | guess_as : forall {g} {d} x b {s},
@@ -60,18 +68,18 @@ Notation AS := AssignmentStack.
 
 
 Theorem LiteralsFormPAcomm:
-  forall {V: Set} `{EqDec_eq V} {g} {x : V} {b} {h},
+  forall  {g} {x : V} {b} {h},
     (LiteralsFormPA (g [x := b] h)) = fconj (flit (ToLiteral x b)) (LiteralsFormPA g).
-  intros V H g.
+  intros g.
   induction g; intros; cbn in *; eauto.
 Qed.
 
 
 Theorem PA_assign_comm:
-  forall {V: Set} `{EqDec_eq V} {g : PAssignment V} {x b v h},
+  forall  {g : PAssignment V} {x b v h},
   PA (g [x := b] h) v =
     if (eq_dec v x) then Some b else PA g v.
-  intros V h g.
+  intros g.
   destruct g as [fg fp].
   induction fp; intros; cbn in *; eauto.
 Qed.
@@ -81,11 +89,11 @@ Hint Constructors RProof.
 
 
 Proposition AssignmentStackHasRProof:
-  forall {V : Set} `{EqDec_eq V} (f : CNF V) g d s,
+  forall  {f : CNF V} {g d s},
     AS f ((g,d)::s) ->
     RProof (fconj (CNFFormula f) (LiteralsFormPA g)) (LiteralsFormPA d).
 
-intros V H f g d s. 
+intros f g d s. 
 remember ((g, d) :: s) as s'.
 intros h. 
 generalize dependent g. generalize dependent d. generalize dependent s.
@@ -104,12 +112,12 @@ Qed.
  
 
 Theorem AssignmentStackGSubD:
-  forall {V : Set} `{EqDec_eq V} {f : CNF V} {g d s},
+  forall  {f : CNF V} {g d s},
   AS f ((g, d) :: s) ->
   forall v T,
     PA g v = Some T ->
     PA d v = Some T.
-  intros V H f g d s.
+  intros f g d s.
   remember ((g, d) :: s) as s'.
   intros h.
   generalize dependent g. generalize dependent d. generalize dependent s.
@@ -137,12 +145,12 @@ end.
 Qed.
 
 Proposition AssignmentStackMonotoncity:
-  forall {V: Set} `{EqDec_eq V} {f : CNF V} { t s},
+  forall  {f : CNF V} { t s},
   AS f (t::s) ->
   s <> nil ->
   AS f s.
 
-intros V H f t s. 
+intros f t s. 
 remember (t :: s) as s'.
 intros h.
 generalize dependent t. generalize dependent s.
@@ -155,12 +163,12 @@ end; try contradiction; eauto.
 Qed.
 
 Proposition AssignmentStackMonotoncity2:
-  forall {V: Set} `{EqDec_eq V} {f : CNF V} {k s},
+  forall  {f : CNF V} {k s},
   AS f (k ++ s) ->
   s <> nil ->
   AS f s.
 
-intros V H f k.
+intros f k.
 generalize dependent f.
 induction k; intros; subst; eauto.
 
@@ -173,11 +181,11 @@ Qed.
 
 
 Theorem change_goal:
-  forall {V:Set} `{EqDec_eq V} {g} {s} (f : CNF V),
+  forall  {g} {s} (f : CNF V),
     AssignmentStack g s ->
     RProof (CNFFormula f) (CNFFormula g) ->
     AssignmentStack f s.
-  intros V H g s f h.
+  intros g s f h.
   generalize dependent f.
   induction h; intros; subst; eauto.
   pose (IHh _ H0). 
@@ -187,7 +195,7 @@ Qed.
 
 
 (* 
-Definition RProofInv {V : Set} `{EqDec_eq V} 
+Definition RProofInv  
     (orginal : Formula V) 
     (guessedLiterals deducedLiterals: PAssignment V) := 
     RProof (fconj orginal (LiteralsFormPA guessedLiterals)) (LiteralsFormPA deducedLiterals).  
@@ -209,7 +217,7 @@ Fixpoint RProofInvAStack {V}
   | failst : forall a c, (CNFByPAssignment c a = Some false) -> FinalState (a::nil, c)
   | succeedst : forall a b c, (CNFByPAssignment c a = Some true) -> FinalState (a::b, c). *)
 
-Definition PeelOffPA {V : Set} `{EqDec_eq V} 
+Definition PeelOffPA  
   {pa : PAssignment V} (h : forall x, PA pa x <> None) : 
   {f : V -> bool | forall x, PA pa x = Some (f x)}.
   
@@ -224,7 +232,7 @@ Definition PeelOffPA {V : Set} `{EqDec_eq V}
   destruct (h _ hc).
 Qed.
 
-Definition FullPA {V : Set} `{EqDec_eq V} 
+Definition FullPA  
 {pa : PAssignment V} (h : forall x, PA pa x <> None) :
   forall v, {result : bool | PA pa v = Some result } :=
   fun v =>
@@ -236,12 +244,12 @@ Definition FullPA {V : Set} `{EqDec_eq V}
 
 
 Corollary AssignmentStackGSubD2:
-  forall {V : Set} `{EqDec_eq V} {f : CNF V} {g d s},
+  forall  {f : CNF V} {g d s},
   AS f ((g, d) :: s) ->
   forall v,
     PA d v = None ->
     PA g v = None.
-  intros V H f g d s h0 v hh.
+  intros f g d s h0 v hh.
   pose (AssignmentStackGSubD h0) as h1.
   destruct (PA g v) eqn:Heq2; subst; eauto.
   pose (h1 _ _ Heq2) as h3.
@@ -254,11 +262,7 @@ AssignmentStack f ((g, d)::s) ->
 forall (h : PA g x = None) (h2 : PA d x = None),
 AssignmentStack f (((g[x := b]h), d[x:=b]h2)::(g,d)::s)  *)
 
-Definition make_guess {V : Set} `{EqDec_eq V} {f : CNF V} {g d s} x b 
-  (stack : AS f ((g, d)::s)) (h : PA d x = None) :
-  AS f (((g[x := b](AssignmentStackGSubD2 stack _ h)), d[x:=b] h)::(g,d)::s).
-  eauto.
-Defined.
+
 
 
 (* Now we should be able to construct the four basic methods
@@ -277,28 +281,61 @@ Definition PolarityofLiteral {V : Set} (l : Literal V) : bool :=
   | negative x => false
   end.
 
-Axiom rp_byassign:
-  forall ,
-  ClauseByPAssignment c d = Some false ->
-  RProof (LiteralsFormPA d) (ClauseFormula c)
+Axiom rp_byassign1:
+  forall {c d},
+  ClauseByPAssignment c d = Some true ->
+  RProof (LiteralsFormPA d) (ClauseFormula c).
 
-Definition unit_prop_AS_spec: forall {V : Set} `{EqDec_eq V} {l c g d s f x b},
+Axiom rp_byassign2:
+  forall {c d},
+  ClauseByPAssignment c d = Some false ->
+  RProof (LiteralsFormPA d) (fneg (ClauseFormula c)).
+
+
+Axiom rp_res:
+  forall {X Y Z : Formula V},
+  RProof X (fdisj Y Z) ->
+  RProof X (fneg Z) ->
+  RProof X Y.
+
+Definition unit_prop_AS_spec: forall  {l c g d s f x b},
   (*
     We later need to relax this - l doesn't have to be the first
     term; l::c doesn't have to be the first term
   *)
   AS ((l::c)::f) ((g,d) :: s) -> 
-  x = VofLiteral l ->
-  b = PolarityofLiteral l ->
+  l = ToLiteral x b ->
   (* eval C under d = false -> *)
   ClauseByPAssignment c d = Some false ->
   (* PA d l = None -> *)
   forall (h : PA d x = None),
   AS ((l::c)::f) ((g,d[x := b]h) :: s).
-  intros. 
+  intros. eapply deduce_as; [eauto | idtac].
+  pose (AssignmentStackHasRProof H0) as HH0. cbn in *.
+  match goal with
+  | [HH0 := _ : RProof (fconj (fconj ?a ?d) ?b) ?c |- _] =>
+      assert (RProof (fconj (fconj a d) b) a) as HH1
+  end; subst;
+  [eapply rp_trans; eapply rp_weaken | idtac].
+  pose (rp_byassign2 H2) as HH3.
+  pose (rp_trans HH0 HH3) as HH4.
+  pose (rp_res HH1 HH4) as HH5. auto.
+Qed.
 
-Definition decide_AS_spec:
-  AS f ((g,d) :: s) -> 
+(* TODO: prove it by crush *)
+
+Definition decide_AS_spec  {f g d s} x b 
+  (stack : AS f ((g, d)::s)) 
+  (h : PA d x = None) :
+  AS f (((g[x := b](AssignmentStackGSubD2 stack _ h)), d[x:=b] h)::(g,d)::s).
+  eauto.
+Defined.
+
+Definition fail_AS_spec: forall {f g d},
+  AS f ((g, d) ::nil) ->
+  CNFByPAssignment f d = Some false ->
+  RProof (CNFFormula f) fbot.
+
 
 (* We will have a non-determinism state transition machine
    We need to introduce monad to make/effect it "effect-free"
@@ -320,74 +357,42 @@ Definition decide_AS_spec:
 *)
 
 
-Definition SucceedAS {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Prop := 
+Definition SucceedAS  {f s} (st : AS f s) : Prop := 
     match s with
     | nil => False
     | (_, d) :: _ => CNFByPAssignment f d = Some true
     end.
   
-Definition FailedAS {V : Set} `{EqDec_eq V} {f s} (st : AS f s) : Set :=
+Definition FailedAS  {f s} (st : AS f s) : Set :=
     RProof (CNFFormula f) fbot.
 
-Definition FinalAS {V : Set} `{EqDec_eq V} {f s} (st : AS f s) := FailedState st + {SucceedState st} .
+Definition FinalAS  {f s} (st : AS f s) := FailedState st + {SucceedState st} .
   
+
+
 
 
 (* A CDCL state targeting to solve formula f
       g is the learned clauses
       s is the current assignment stack
 *)
-(* Specification of step : CDCLState f -> CDCLState f -> Prop
-  1. step is terminating
-  2. if steps x y and SucceedState y  
-      then assignment from y can evaluate f into true
-  3. if steps x y and FailedState y
-      then I can extract RProof (CNFFormula f) fbot
+Definition CDCLState  (f : CNF V) :=  
+  {g & {s & (AS (f ++ g) s) * RProof (CNFFormula f) (CNFFormula g)} }. 
 
-  I will relax proving 1, by only proving 1 
-    in the version of stepAS
-      (unless I have time later)
-  for 2 and 3, the correspondent in stepAS will also be proved
-    as lemma
+(* The invariant here for (k : CDCLState f)
+  1. if SucceedState k  
+      then assignment from k can evaluate f into true
+  2. if FailedState k
+      then I can extract (RProof (CNFFormula f) fbot)
 *)
 
 
-Definition CDCLState {V : Set} `{EqDec_eq V} (f : CNF V) :=  
-  {g & {s & (AS (f ++ g) s) * RProof (CNFFormula f) (CNFFormula g)} }. 
-
-
-Inductive step {V : Set} `{EqDec_eq V} {f : CNF V}: 
-  CDCLState f -> CDCLState f -> Prop := 
-  | unit_prop :
-      step (existT _ (existT _ ))
-
-
-(* This is not so important but
-    we have a partial ordering on Assignment Stack
-    and if we have finite number of variables
-    i.e. V is of finite size, 
-    then we have, for every chain, a "largest" stack
-
-    This is not important because it is just a theorem/verification
-     we need to prove 
-
-    It will disappear after extraction.
-
-    The important is the four theorem that act as small-step transition
-    Basically unit prop, decide, checkFail, and backjump.
-
-    We might need to add more
-    *)
-Proposition Terminating:
-  forall x y,
-    steps x y ->
-    exists z,
-    steps y z /\ FinalState z.
-Admitted.
-
 
 (* The following are the extracted functions 
-    has similar signature as step : CDCL f -> CDCL f -> Prop
+    they all have similar signature as 
+    CDCL f * (... sth else needed) -> CDCL f
+    basically these can be seen as 
+    non-determinstic transition in a (CDCL f) world
 *)
 
 (* One step unit-prop spec*)
@@ -399,3 +404,14 @@ Admitted.
 (* Check Failure spec*)
 
 (* Back Jump spec*)
+
+
+(* Now we need to really model
+    all possible (non-deterministic) transition
+      inside (CDCL f) world
+    using 
+      the above 5 specification functions
+  and then prove the transition above will give
+    some good property on termination
+*)
+

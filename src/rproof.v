@@ -152,6 +152,44 @@ Fixpoint FormulaByPAssignment {V: Set} `{EqDec_eq V} (c : Formula V) (s : PAssig
   end.
 
 
+  Definition ToLiteral {V: Set} `{EqDec_eq V} v (b : bool) : Literal V :=
+    match b with 
+    | true => positive v
+    | false => negative v
+    end.
+  
+  Fixpoint LiteralsForm {V : Set} `{EqDec_eq V} {f} (fa : FiniteAssignment f) : Formula V :=
+    match fa with
+    | empty_fa => ftop
+    | assign_fa v b f' _ => fconj (flit (ToLiteral v b)) (LiteralsForm f')
+    end.
+  
+  Definition LiteralsFormPA {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Formula V :=
+    let (f, p) := pa 
+    in LiteralsForm p.
+  
+  (* Proposition LiteralsFormWf:
+    forall f (fa : FiniteAssignment f), *)
+      
+  Fixpoint ClauseFormula {V : Set} `{EqDec_eq V} (c : Clause V): Formula V:=
+    match c with 
+    | nil => fbot 
+    | cons h t => fdisj (flit h) (ClauseFormula t) 
+    end.
+  
+  Fixpoint CNFFormula {V : Set} `{EqDec_eq V} (c : CNF V): Formula V :=
+    match c with 
+    | nil => ftop 
+    | cons h t => fconj (ClauseFormula h) (CNFFormula t) 
+    end.
+  
+  (* Well-defined-ness *)
+  Theorem CNFFormulaWf:
+    forall f a,
+    CNFByAssignment f a = FormulaByAssignment (CNFFormula f) a.
+  Admitted.
+
+
 (* Example:
   (forall x, s x <> None) ->
   FormulaByPAssignment *)
@@ -177,7 +215,7 @@ So RProof is always a CNF => Conjunction of literals
     there is also other chapters about prove by reflection
 *)
 
-Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
+Inductive RProof {V: Set} `{EqDec_eq V}: Formula V -> Formula V -> Set :=
   | rp_id : forall x, RProof x x
   | rp_trans : forall {x y z},
       RProof x y ->
@@ -214,10 +252,32 @@ Inductive RProof {V: Set}: Formula V -> Formula V -> Set :=
       RProof X Z ->
       RProof X (fconj Y Z)
   | rp_comm_conj : forall A B C,
-    RProof (fconj A (fconj B C)) (fconj B (fconj A C)).
+    RProof (fconj A (fconj B C)) (fconj B (fconj A C))
+  | rp_byassign1:
+      forall {c d},
+    ClauseByPAssignment c d = Some true ->
+    RProof (LiteralsFormPA d) (ClauseFormula c)
+  | rp_byassign2:
+      forall {c d},
+    ClauseByPAssignment c d = Some false ->
+    RProof (LiteralsFormPA d) (fneg (ClauseFormula c))
+  | rp_res:
+      forall {X Y Z : Formula V},
+    RProof X (fdisj Y Z) ->
+    RProof X (fneg Z) ->
+    RProof X Y
+  | rp_byassign4:
+      forall {c d},
+    FormulaByPAssignment c d = Some false ->
+    RProof (LiteralsFormPA d) (fneg c)
+  | rp_comm_disj:
+      forall {X Y Z : Formula V},
+      RProof X (fdisj Y Z) ->
+      RProof X (fdisj Z Y).
+
 
 Definition rproofByAssignment :=
-  fun {V : Set} {x : Formula V} {y} (h: RProof x y) (a : Assignment V) => 
+  fun {V : Set} `{EqDec_eq V} {x : Formula V} {y} (h: RProof x y) (a : Assignment V) => 
     FormulaByAssignment (fdisj (fneg x) y) a.
 
 Definition rproofByPAssignment :=
@@ -226,55 +286,18 @@ Definition rproofByPAssignment :=
 
 
 Proposition RProofSound: 
-  forall {V} {x : Formula V} {y}
+  forall {V : Set} `{EqDec_eq V} {x : Formula V} {y}
          (h : RProof x y) (a: Assignment V),
    FormulaByAssignment (fdisj (fneg x) y) a = true.
 Admitted.
 
-Definition RProofl {V} (h : Formula V) (c : Literal V) := RProof h (flit c).
+Definition RProofl {V : Set} `{EqDec_eq V} (h : Formula V) (c : Literal V) := RProof h (flit c).
 
 (* Lemma RProoflid  *)
 
 (* This one is go *)
 Proposition RProoflSound:
-  forall {V} {x : Formula V} {y}
+  forall {V : Set} `{EqDec_eq V} {x : Formula V} {y}
     (h : RProofl x y) (a: Assignment V),
     FormulaByAssignment (fdisj (fneg x) (flit y)) a = true.
-Admitted.
-
-Definition ToLiteral {V: Set} `{EqDec_eq V} v (b : bool) : Literal V :=
-  match b with 
-  | true => positive v
-  | false => negative v
-  end.
-
-Fixpoint LiteralsForm {V : Set} `{EqDec_eq V} {f} (fa : FiniteAssignment f) : Formula V :=
-  match fa with
-  | empty_fa => ftop
-  | assign_fa v b f' _ => fconj (flit (ToLiteral v b)) (LiteralsForm f')
-  end.
-
-Definition LiteralsFormPA {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Formula V :=
-  let (f, p) := pa 
-  in LiteralsForm p.
-
-(* Proposition LiteralsFormWf:
-  forall f (fa : FiniteAssignment f), *)
-    
-Fixpoint ClauseFormula {V : Set} `{EqDec_eq V} (c : Clause V): Formula V:=
-  match c with 
-  | nil => fbot 
-  | cons h t => fdisj (flit h) (ClauseFormula t) 
-  end.
-
-Fixpoint CNFFormula {V : Set} `{EqDec_eq V} (c : CNF V): Formula V :=
-  match c with 
-  | nil => ftop 
-  | cons h t => fconj (ClauseFormula h) (CNFFormula t) 
-  end.
-
-(* Well-defined-ness *)
-Theorem CNFFormulaWf:
-  forall f a,
-  CNFByAssignment f a = FormulaByAssignment (CNFFormula f) a.
 Admitted.

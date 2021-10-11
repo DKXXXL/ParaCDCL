@@ -281,23 +281,6 @@ Definition PolarityofLiteral {V : Set} (l : Literal V) : bool :=
   | negative x => false
   end.
 
-Axiom rp_byassign1:
-  forall {c d},
-  ClauseByPAssignment c d = Some true ->
-  RProof (LiteralsFormPA d) (ClauseFormula c).
-
-Axiom rp_byassign2:
-  forall {c d},
-  ClauseByPAssignment c d = Some false ->
-  RProof (LiteralsFormPA d) (fneg (ClauseFormula c)).
-
-
-Axiom rp_res:
-  forall {X Y Z : Formula V},
-  RProof X (fdisj Y Z) ->
-  RProof X (fneg Z) ->
-  RProof X Y.
-
 Definition unit_prop_AS_spec: forall  {l c g d s f x b},
   (*
     We later need to relax this - l doesn't have to be the first
@@ -401,15 +384,7 @@ rewrite H3 in H1. inversion H1; subst; eauto.
 Qed.
 
 
-Axiom rp_byassign4:
-  forall {c d},
-  FormulaByPAssignment c d = Some false ->
-  RProof (LiteralsFormPA d) (fneg c).
 
-Axiom rp_comm_disj:
-  forall {X Y Z : Formula V},
-  RProof X (fdisj Y Z) ->
-  RProof X (fdisj Z Y).
 
 
 Definition backjump_AS_spec: forall  {f C k g d s l} x b,
@@ -555,3 +530,4 @@ Admitted.
     some good property on termination
 *)
 
+End CDCLtransition.

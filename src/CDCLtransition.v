@@ -483,7 +483,14 @@ Definition FinalAS  {f s} (st : AS f s) := FailedState st + {SucceedState st} .
       s is the current assignment stack
 *)
 Definition CDCLState  (f : CNF V) :=  
-  {g & {s & (AS (f ++ g) s) * RProof (CNFFormula f) (CNFFormula g)} }. 
+  {learned & {s & (AS (learned ++ f) s) * RProof (CNFFormula f) (CNFFormula learned)} }. 
+
+(* This learned clause is not only useful for learning/forgetting
+    But it is also useful for unit-prop, because the current unit-prop
+      can only resolve  the very first clause in the f : CNF V (as a list)
+    thus we can hack with learning the resolvent clause at the front and do the unit prop
+    and then forgetting, this gives us a better unit-prop  
+*)
 
 Definition SucceedState  {f} (st : CDCLState f) : Prop := 
   match st with

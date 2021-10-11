@@ -331,11 +331,92 @@ Definition decide_AS_spec  {f g d s} x b
   eauto.
 Defined.
 
-Definition fail_AS_spec: forall {f g d},
-  AS f ((g, d) ::nil) ->
-  CNFByPAssignment f d = Some false ->
-  RProof (CNFFormula f) fbot.
+Lemma AS_no_guessing:
+  forall {f g d},
+  AS f ((g, d) :: nil) ->
+  g = ∅.
+intros f g d. remember ((g, d) :: nil) as s.
+intros H0. generalize dependent g. generalize dependent d.
+induction H0; intros; subst; eauto; try discriminate; try contradiction;
+match goal with 
+| [h : ?a::?b = ?c::?d |- _] =>
+    inversion h; intros; subst; eauto 
+end.
+Qed.
 
+
+
+Definition fail_AS_spec: forall {c f g d},
+  AS (c::f) ((g, d) ::nil) ->
+  ClauseByPAssignment c d = Some false ->
+  RProof (CNFFormula (c:: f)) fbot.
+
+
+intros c f g d H0 H1.
+pose (AS_no_guessing H0) as HH'. 
+generalize HH'. intros HH. clear HH'. subst.
+pose (AssignmentStackHasRProof H0) as H2.
+pose (rp_byassign2 H1) as H3. cbn in *.
+pose (rp_trans H2 H3) as H4.
+eapply rp_trans; [idtac | eapply rp_contra]; eauto.
+Qed.
+
+Theorem PA_consistent_with_A:
+  forall {f pa g},
+    CNFByPAssignment f pa <> None ->
+    (forall x, 
+        PA pa x <> None ->
+        PA pa x = Some (g x)
+      ) ->
+      CNFByPAssignment f pa = Some (CNFByAssignment f g).
+Admitted.
+
+Definition extendPA (pa : PAssignment V) : Assignment V := 
+  fun v =>
+    match PA pa v with
+    | Some k => k
+    | None => true
+    end.
+
+Corollary PA_consistent_with_ExtendedA:
+  forall {f pa},
+  CNFByPAssignment f pa <> None ->
+  CNFByPAssignment f pa = Some (CNFByAssignment f (extendPA pa)).
+  intros; eapply PA_consistent_with_A; eauto.
+  unfold extendPA. intros; destruct (PA pa x); subst; eauto; try discriminate; try contradiction.
+Qed.
+
+
+
+
+Definition succeed_AS_spec: forall {f g d s},
+  AS f ((g, d) ::s) ->
+  CNFByPAssignment f d = Some true ->
+  {g2 | CNFByAssignment f g2 = true}.
+intros f g d s H0 H1. exists (extendPA d).
+assert (CNFByPAssignment f d <> None) as H2. repeat rewrite H1 in *.
+intro; try discriminate; try contradiction.
+pose (PA_consistent_with_ExtendedA H2) as H3.
+rewrite H3 in H1. inversion H1; subst; eauto.
+Qed.
+
+
+Definition backjump_AS_spec: forall  {f C k g d s l} x b,
+  (*
+    We later need to relax this - l doesn't have to be the first
+    term; l::c doesn't have to be the first term
+  *)
+  AS f (k ++ (g,d) :: s) -> 
+  l = ToLiteral x b ->
+  (* f ⊧ C ∨ l*)
+  RProof (CNFFormula f) (fdisj C (flit l)) ->
+  (* eval C under d = false -> *)
+  FormulaByPAssignment C d = Some false ->
+  (* PA d l = None -> *)
+  forall (h : PA d x = None),
+  AS f ((g,d[x := b]h) :: s).
+
+intros 
 
 (* We will have a non-determinism state transition machine
    We need to introduce monad to make/effect it "effect-free"
@@ -357,7 +438,7 @@ Definition fail_AS_spec: forall {f g d},
 *)
 
 
-Definition SucceedAS  {f s} (st : AS f s) : Prop := 
+(* Definition SucceedAS  {f s} (st : AS f s) : Prop := 
     match s with
     | nil => False
     | (_, d) :: _ => CNFByPAssignment f d = Some true
@@ -367,7 +448,7 @@ Definition FailedAS  {f s} (st : AS f s) : Set :=
     RProof (CNFFormula f) fbot.
 
 Definition FinalAS  {f s} (st : AS f s) := FailedState st + {SucceedState st} .
-  
+   *)
 
 
 

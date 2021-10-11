@@ -462,7 +462,8 @@ Qed.
 *)
 
 
-(* Definition SucceedAS  {f s} (st : AS f s) : Prop := 
+(* 
+Definition SucceedAS  {f s} (st : AS f s) : Prop := 
     match s with
     | nil => False
     | (_, d) :: _ => CNFByPAssignment f d = Some true
@@ -483,6 +484,31 @@ Definition FinalAS  {f s} (st : AS f s) := FailedState st + {SucceedState st} .
 *)
 Definition CDCLState  (f : CNF V) :=  
   {g & {s & (AS (f ++ g) s) * RProof (CNFFormula f) (CNFFormula g)} }. 
+
+Definition SucceedState  {f} (st : CDCLState f) : Prop := 
+  match st with
+  | existT _ _ (existT _ s _) =>
+    match s with
+    | (_, d) :: _ => CNFByPAssignment f d = Some true
+    | _ => False
+    end
+  end.
+
+Definition FailedState  {f} (st : CDCLState f) : Prop := 
+    match st with
+    | existT _ _ (existT _ s _) =>
+      match s with
+      | (_, d) :: nil => CNFByPAssignment f d = Some false
+      | _ => False
+      end
+    end.
+
+
+Definition FinalState_Dec:
+  forall {f} (st : CDCLState f),
+    {SucceedState st} + {FailedState st} + {~ (SucceedState st) /\ ~ (FailedState st)}.
+Admitted.
+
 
 (* The invariant here for (k : CDCLState f)
   1. if SucceedState k  
@@ -505,6 +531,8 @@ Definition CDCLState  (f : CNF V) :=
 (* UnitProp until cannot spec*)
 
 (* Guess One Literal spec*)
+
+(* Check Success spec*)
 
 (* Check Failure spec*)
 

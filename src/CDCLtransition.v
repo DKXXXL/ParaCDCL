@@ -401,6 +401,17 @@ rewrite H3 in H1. inversion H1; subst; eauto.
 Qed.
 
 
+Axiom rp_byassign4:
+  forall {c d},
+  FormulaByPAssignment c d = Some false ->
+  RProof (LiteralsFormPA d) (fneg c).
+
+Axiom rp_comm_disj:
+  forall {X Y Z : Formula V},
+  RProof X (fdisj Y Z) ->
+  RProof X (fdisj Z Y).
+
+
 Definition backjump_AS_spec: forall  {f C k g d s l} x b,
   (*
     We later need to relax this - l doesn't have to be the first
@@ -416,7 +427,20 @@ Definition backjump_AS_spec: forall  {f C k g d s l} x b,
   forall (h : PA d x = None),
   AS f ((g,d[x := b]h) :: s).
 
-intros 
+intros f C k g d s l x b h0. 
+
+assert (AS f ((g,d) :: s)) as H0; try eapply AssignmentStackMonotoncity2; try eapply h0.
+intro HC. inversion HC. 
+assert (RProof (fconj (CNFFormula f) (LiteralsFormPA g)) (LiteralsFormPA d)) as H2; try eapply AssignmentStackHasRProof; eauto.
+intros h1 h2 h3 h.
+assert (RProof (LiteralsFormPA d) (fneg C)) as H4; try eapply rp_byassign4; eauto.
+assert (RProof (fconj (CNFFormula f) (LiteralsFormPA g)) (fneg C)) as H5; eauto.
+assert (RProof (fconj (CNFFormula f) (LiteralsFormPA g)) (fdisj C (flit l))) as H6; eauto.
+assert (RProof (fconj (CNFFormula f) (LiteralsFormPA g))  (flit l)) as H7.
++ eapply rp_res; [idtac | eauto]. eapply rp_comm_disj. eauto.
++ subst. eauto.
+Qed. 
+
 
 (* We will have a non-determinism state transition machine
    We need to introduce monad to make/effect it "effect-free"

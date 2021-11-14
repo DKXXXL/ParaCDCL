@@ -326,17 +326,182 @@ admit. admit. admit. admit.
 + destruct l; cbn in *; eauto.
 + *)
 
-Lemma PAAsImplies: forall {V : Set} `{EqDec_eq V} {d} {C : Formula V} {t},
-FormulaByPAssignment C d = Some t -> forall a,
-FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) C) a = t.
-intros V H d. destruct d as [f hf].
-induction hf; intros; cbn in *; eauto.
-admit.
-induction C; intros; cbn in *; eauto.
+Definition LessRefine {V : Set} `{EqDec_eq V} (b a : PAssignment V) :=
+  forall x, PA b x <> None -> PA a x = PA b x.
+
+Definition LessRefine' {V : Set} `{EqDec_eq V} (b : PAssignment V) (a: Assignment V) :=
+  forall x t, PA b x = Some t -> PA b x = Some (a x).
+
+
+Lemma refinement_invariance: forall {V : Set} `{EqDec_eq V} {c} {b a}
+  (hlr : LessRefine b a)  {t},
+  FormulaByPAssignment c b = Some t ->
+  FormulaByPAssignment c a = Some t.
+  intros V H c. 
+  induction c; intros; intros; cbn in *; eauto.
+  + destruct l; cbn in *; try erewrite hlr; subst; eauto;
+  intro hwrongeq; try rewrite hwrongeq in *; try discriminate.
+  + 
+    Ltac breakAssumpt1:=
+      match goal with
+      | [h0 : match ?exp with _ => _ end = _ |- _ ] => 
+        let heq := fresh "heq" in
+        destruct exp eqn:heq; try discriminate; try contradiction
+      end.
+    repeat breakAssumpt1.
+    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto).
+  + repeat breakAssumpt1.
+    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto).
+  + repeat breakAssumpt1.
+    repeat (erewrite IHc; eauto; fail).
+Qed.
+
+
+Ltac try_injection :=
+  match goal with
+  | [h : Some _ = Some _ |- _] =>
+    injection h; intros; subst; eauto;  generalize h; clear h;
+    try_injection;
+    intro h
+  | _ => idtac
+  end.
+
+Lemma refinement'_invariance: forall {V : Set} `{EqDec_eq V} {c} {b a}
+  (hlr : LessRefine' b a)  {t},
+  FormulaByPAssignment c b = Some t ->
+  FormulaByAssignment c a = t.
+  intros V H c. 
+  induction c; intros; intros; cbn in *;try_injection; subst; try reflexivity. 
+  + destruct l; cbn in *. erewrite hlr in *; subst; eauto.
+  try_injection; subst; eauto.
+  repeat breakAssumpt1; try_injection; subst. erewrite hlr in *; subst; eauto.
+  try_injection; subst; eauto.
+  + repeat breakAssumpt1; try_injection; subst; eauto.  
+    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto).
+  + repeat breakAssumpt1.
+    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto); try_injection; subst; eauto.
+  + repeat breakAssumpt1.
+    repeat (erewrite IHc; eauto); try_injection; subst; eauto.
+
+Qed.
+
+Lemma LessRefine_inductive:
+  forall {V : Set} `{EqDec_eq V} {x : PAssignment V}  {f h v b},
+  LessRefine (existT _ f h) x ->
+  LiteralByPAssignment (ToLiteral v b) x = Some true ->
+  forall (e :f v = None),
+  LessRefine (existT _ (addAssignment v b f) (assign_fa v b h e)) x.
+  unfold LessRefine. unfold addAssignment in *.
+  unfold LiteralByPAssignment in *. unfold ToLiteral in *.
+  intros.
+  destruct (eq_dec x0 v); subst; cbn in *. 
+  destruct (eq_dec v v); subst; try discriminate; try contradiction.
+  repeat breakAssumpt1; subst. injection heq; intros;subst; eauto.
+  injection heq; intros; subst; eauto. destruct b0; intros; try discriminate; try contradiction. eauto.
+  repeat breakAssumpt1; subst;
+  destruct (eq_dec x0 v); subst; cbn in *; try discriminate; try contradiction;
+  try eapply H0; eauto.
+Qed.
+
+Lemma LessRefine'_inductive:
+  forall {V : Set} `{EqDec_eq V} {x : Assignment V}  {f h v b},
+  LessRefine' (existT _ f h) x ->
+  LiteralByAssignment (ToLiteral v b) x =  true ->
+  forall (e :f v = None),
+  LessRefine' (existT _ (addAssignment v b f) (assign_fa v b h e)) x.
+
+  unfold LessRefine'. unfold addAssignment in *.
+  unfold LiteralByAssignment in *. unfold ToLiteral in *.
+  intros; cbn in *;
+  repeat breakAssumpt1; try_injection; subst; eauto;
+  try injection heq0; intros;subst; eauto; try erewrite H1; eauto.
+  destruct (x v0); subst; eauto; try discriminate; try contradiction.
+Qed.
+
+
+Lemma EvaluationSuccess_LessRefine: 
+  forall {V : Set} `{EqDec_eq V} {y} {x : PAssignment V}  ,
+  FormulaByPAssignment (LiteralsFormPA y) x = Some true ->
+  LessRefine y x.
+  intros V H y.
+  destruct y as [f hf].
+  induction hf; cbn in *; intros; eauto.
+  + unfold LessRefine. intros. cbn in *. unfold emptyAssignment in *. 
+    try contradiction.
+  + repeat breakAssumpt1.
+    destruct b0; destruct b1; subst; try discriminate; try contradiction. 
+    pose (IHhf _ heq0).
+    try eapply LessRefine_inductive; eauto.
+  Qed.
+
+
+Lemma EvaluationSuccess_LessRefine': 
+  forall {V : Set} `{EqDec_eq V} {y} {x : Assignment V}  ,
+  FormulaByAssignment (LiteralsFormPA y) x = true ->
+  LessRefine' y x.
+  intros V H y.
+  destruct y as [f hf].
+  induction hf; cbn in *; intros; eauto.
+  + unfold LessRefine'. intros. cbn in *. unfold emptyAssignment in *. 
+    try contradiction; try discriminate.
+  + destruct (LiteralByAssignment (ToLiteral v b) x) eqn:heq0; 
+    destruct (FormulaByAssignment (LiteralsForm hf) x) eqn:heq1; 
+    subst; try discriminate; try contradiction. 
+    pose (IHhf _ heq1).
+    try eapply LessRefine'_inductive; eauto.
+  Qed.
+
+     
+
+
+Lemma PAAsImplies_trans: forall {V : Set} `{EqDec_eq V} {a} {c : Formula V} {b},
+  FormulaByPAssignment (LiteralsFormPA b) a = Some true ->
+  FormulaByPAssignment c b = Some true ->
+  FormulaByPAssignment c a = Some true.
+  intros V H a c b h.
+  pose (EvaluationSuccess_LessRefine h).
+  intros. eapply refinement_invariance; eauto.
+Qed.
+
+(* Definition LiftAtoPA (a : Assignment V) : PAssignment V :=
+   *)
+
+Lemma PAAsImplies_trans2: forall {V : Set} `{EqDec_eq V} {a : Assignment V} {b},
+  FormulaByAssignment (LiteralsFormPA b) a = true -> forall c,
+  FormulaByPAssignment c b = Some true ->
+  FormulaByAssignment c a = true.
+  intros V H a c h b.
+  pose (EvaluationSuccess_LessRefine' h).
+  intros. eapply refinement'_invariance; eauto.
+Qed.
+
+
+Lemma PAAsImplies_true: forall {V : Set} `{EqDec_eq V} {d} {C : Formula V} ,
+FormulaByPAssignment C d = Some true -> forall a,
+FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) C) a = true.
+cbn in *.
+intros V H d C h0 assign.
+destruct (FormulaByAssignment C assign) eqn:heq0;
+destruct (FormulaByAssignment (LiteralsFormPA d) assign) eqn:heq1;
+cbn in *; try eauto.
+pose (PAAsImplies_trans2 heq1 C). eauto.
+Qed.
+
+(* induction C; intros; cbn in *; eauto.
 + destruct l; cbn in *; eauto; unfold emptyAssignment in H0; try discriminate.
 + 
 induction d; intros; cbn in *; eauto.
-Admitted.
+Admitted. *)
+
+
+Lemma PAAsImplies_false: forall {V : Set} `{EqDec_eq V} {d} {C : Formula V} ,
+FormulaByPAssignment C d = Some false -> forall a,
+FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) (fneg C)) a = true.
+intros V H d C h.
+assert (FormulaByPAssignment (fneg C) d = Some true); [cbn in *; rewrite h in *; try reflexivity | idtac].
+intros. eapply PAAsImplies_true; eauto.
+Qed.
+
 
 Lemma FormulaByPA_ClauseByPA: forall  {V : Set} `{EqDec_eq V} {c : Clause V} {d},
 FormulaByPAssignment (ClauseFormula c) d =
@@ -346,10 +511,17 @@ induction c; intros; cbn in *; eauto.
 rewrite IHc in *. eauto.
 Qed.
 
-Lemma PAAsImplies_Clause: forall {V : Set} `{EqDec_eq V} {c : Clause V} {d t},
-ClauseByPAssignment c d = Some t -> forall a,
-FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) (ClauseFormula c)) a = t.
-intros. eapply PAAsImplies. cbn in *.
+Lemma PAAsImplies_Clause_true: forall {V : Set} `{EqDec_eq V} {c : Clause V} {d},
+ClauseByPAssignment c d = Some true -> forall a,
+FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) (ClauseFormula c)) a = true.
+intros. eapply PAAsImplies_true. cbn in *.
+  rewrite FormulaByPA_ClauseByPA in *; eauto.
+Qed.
+
+Lemma PAAsImplies_Clause_false: forall {V : Set} `{EqDec_eq V} {c : Clause V} {d},
+ClauseByPAssignment c d = Some false -> forall a,
+FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) (fneg (ClauseFormula c))) a = true.
+intros. eapply PAAsImplies_false. cbn in *.
   rewrite FormulaByPA_ClauseByPA in *; eauto.
 Qed.
 
@@ -383,12 +555,20 @@ repeat match goal with
 end;
 try contradiction; try discriminate);
 (* Case : ClauseByPAssignment *)
-try (pose (PAAsImplies e assign); cbn in *;
+(try pose (PAAsImplies_Clause_true e assign); 
+try pose (PAAsImplies_Clause_false e assign);
+cbn in *;
 repeat match goal with
 | [h : FormulaByAssignment ?x ?a = _ |- _] =>
     rewrite h in *; cbn in *; clear h
-end; try discriminate; try contradiction; fail).
-
+end; try discriminate; try contradiction).
+(* Case : FormulaByPAssignment *)
+pose (PAAsImplies_false e assign); cbn in *; 
+try(repeat match goal with
+| [h : FormulaByAssignment ?x ?a = _ |- _] =>
+    rewrite h in *; cbn in *; clear h
+end; subst; eauto; fail).
+Qed.
 
 
 Definition RProofl {V : Set} `{EqDec_eq V} (h : Formula V) (c : Literal V) := RProof h (flit c).

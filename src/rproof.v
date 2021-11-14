@@ -107,15 +107,35 @@ Definition LiteralByPAssignment {V : Set} `{EqDec_eq V} (c : Literal V) (a : PAs
   end
   end.
 
-Definition ClauseByAssignment {V} (c : Clause V)  (a : Assignment V): bool.
-Admitted.
-Definition ClauseByPAssignment {V : Set} `{EqDec_eq V} (c : Clause V) (a : PAssignment V): option bool.
-Admitted.
+Fixpoint ClauseByAssignment {V} (c : Clause V)  (a : Assignment V): bool :=
+  match c with
+  | nil => false
+  | (cons h t) => orb (LiteralByAssignment h a) (ClauseByAssignment t a)
+  end.
+Fixpoint ClauseByPAssignment {V : Set} `{EqDec_eq V} (c : Clause V) (a : PAssignment V): option bool :=
+  match c with
+  | nil => Some false
+  | (cons h t) =>
+    match LiteralByPAssignment h a, ClauseByPAssignment t a with
+    | Some b1, Some b2 => Some (orb b1 b2)
+    | _, _ => None
+    end
+  end.
 
-Definition CNFByAssignment {V} (c : CNF V)  (a : Assignment V): bool.
-Admitted.
-Definition CNFByPAssignment {V : Set} `{EqDec_eq V} (c : CNF V) (a : PAssignment V): option bool. 
-Admitted.
+Fixpoint CNFByAssignment {V} (c : CNF V)  (a : Assignment V): bool :=
+  match c with
+  | nil => true
+  | (cons h t) => andb (ClauseByAssignment h a) (CNFByAssignment t a)
+  end.
+Fixpoint CNFByPAssignment {V : Set} `{EqDec_eq V} (c : CNF V) (a : PAssignment V): option bool :=
+  match c with
+  | nil => Some true
+  | (cons h t) => 
+    match (ClauseByPAssignment h a), (CNFByPAssignment t a) with 
+    | Some b1, Some b2 => Some (andb b1 b2)
+    | _, _ => None
+    end
+  end.
 
 Fixpoint FormulaByAssignment {V} (c : Formula V)  (s : Assignment V): bool:=
   let rec c := FormulaByAssignment c s in
@@ -152,6 +172,8 @@ Fixpoint FormulaByPAssignment {V: Set} `{EqDec_eq V} (c : Formula V) (s : PAssig
   end.
 
 
+
+
   Definition ToLiteral {V: Set} `{EqDec_eq V} v (b : bool) : Literal V :=
     match b with 
     | true => positive v
@@ -183,11 +205,19 @@ Fixpoint FormulaByPAssignment {V: Set} `{EqDec_eq V} (c : Formula V) (s : PAssig
     | cons h t => fconj (ClauseFormula h) (CNFFormula t) 
     end.
   
+Theorem ClauseWf {V : Set} `{EqDec_eq V} (c : Clause V)  : forall a,
+    ClauseByAssignment c a = FormulaByAssignment (ClauseFormula c) a.
+induction c; intros; cbn in *; eauto.
+repeat erewrite IHc; eauto.
+Qed.
+  
   (* Well-defined-ness *)
-  Theorem CNFFormulaWf:
-    forall f a,
-    CNFByAssignment f a = FormulaByAssignment (CNFFormula f) a.
-  Admitted.
+Theorem CNFFormulaWf {V : Set} `{EqDec_eq V} (cnf : CNF V) : forall   a,
+  CNFByAssignment cnf a = FormulaByAssignment (CNFFormula cnf) a.
+induction cnf; intros; cbn in *; try eauto.
+  repeat erewrite IHcnf; repeat erewrite ClauseWf; try eauto.
+Qed.
+
 
 
 (* Example:
@@ -284,12 +314,82 @@ Definition rproofByPAssignment :=
   fun {V : Set} `{EqDec_eq V} {x : Formula V} {y} (h: RProof x y) (a : PAssignment V) => 
     FormulaByPAssignment (fdisj (fneg x) y) a.
 
+(* Lemma LiteralPA_empty_None:
+forall {V : Set} `{EqDec_eq V} {l : Literal V},
+  LiteralByPAssignment   l empty_pa = None. *)
+
+(* Lemma FormulaByPA_empty_None:
+forall {V : Set} `{EqDec_eq V} {f : Formula V},
+  FormulaByPAssignment  f empty_pa = None.
+intros V H f. induction f; intros; eauto.
+admit. admit. admit. admit. 
++ destruct l; cbn in *; eauto.
++ *)
+
+Lemma PAAsImplies: forall {V : Set} `{EqDec_eq V} {d} {C : Formula V} {t},
+FormulaByPAssignment C d = Some t -> forall a,
+FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) C) a = t.
+intros V H d. destruct d as [f hf].
+induction hf; intros; cbn in *; eauto.
+admit.
+induction C; intros; cbn in *; eauto.
++ destruct l; cbn in *; eauto; unfold emptyAssignment in H0; try discriminate.
++ 
+induction d; intros; cbn in *; eauto.
+Admitted.
+
+Lemma FormulaByPA_ClauseByPA: forall  {V : Set} `{EqDec_eq V} {c : Clause V} {d},
+FormulaByPAssignment (ClauseFormula c) d =
+  ClauseByPAssignment c d.
+  intros V h c.
+induction c; intros; cbn in *; eauto.
+rewrite IHc in *. eauto.
+Qed.
+
+Lemma PAAsImplies_Clause: forall {V : Set} `{EqDec_eq V} {c : Clause V} {d t},
+ClauseByPAssignment c d = Some t -> forall a,
+FormulaByAssignment (fdisj (fneg (LiteralsFormPA d)) (ClauseFormula c)) a = t.
+intros. eapply PAAsImplies. cbn in *.
+  rewrite FormulaByPA_ClauseByPA in *; eauto.
+Qed.
+
+
+Ltac clean_pose hk :=
+  let h2 := fresh "h" in 
+  pose hk as h2; generalize h2;
+  clear h2; intro h2.
 
 Proposition RProofSound: 
   forall {V : Set} `{EqDec_eq V} {x : Formula V} {y}
          (h : RProof x y) (a: Assignment V),
    FormulaByAssignment (fdisj (fneg x) y) a = true.
-Admitted.
+intros V H x y h.
+induction h; intros assign; cbn in *;
+(* Proof by Enumerating Truthtable *)
+try (((repeat match goal with
+| [h : (forall _:Assignment V,_)  |- _] =>
+  clean_pose (h assign); clear h
+end);
+(repeat match goal with
+|  |- context[FormulaByAssignment ?x ?a] =>
+    let heq := fresh "heq" in
+    destruct (FormulaByAssignment x a) eqn:heq; subst;
+    try rewrite heq in *
+end);
+subst; cbn in *; try reflexivity);
+repeat match goal with
+| [h : FormulaByAssignment ?x ?a = _ |- _] =>
+    rewrite h in *; cbn in *; clear h
+end;
+try contradiction; try discriminate);
+(* Case : ClauseByPAssignment *)
+try (pose (PAAsImplies e assign); cbn in *;
+repeat match goal with
+| [h : FormulaByAssignment ?x ?a = _ |- _] =>
+    rewrite h in *; cbn in *; clear h
+end; try discriminate; try contradiction; fail).
+
+
 
 Definition RProofl {V : Set} `{EqDec_eq V} (h : Formula V) (c : Literal V) := RProof h (flit c).
 
@@ -300,4 +400,5 @@ Proposition RProoflSound:
   forall {V : Set} `{EqDec_eq V} {x : Formula V} {y}
     (h : RProofl x y) (a: Assignment V),
     FormulaByAssignment (fdisj (fneg x) (flit y)) a = true.
-Admitted.
+intros. eapply RProofSound. unfold RProofl in *. eauto.
+Qed.

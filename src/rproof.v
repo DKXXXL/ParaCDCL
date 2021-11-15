@@ -487,11 +487,6 @@ cbn in *; try eauto.
 pose (PAAsImplies_trans2 heq1 C). eauto.
 Qed.
 
-(* induction C; intros; cbn in *; eauto.
-+ destruct l; cbn in *; eauto; unfold emptyAssignment in H0; try discriminate.
-+ 
-induction d; intros; cbn in *; eauto.
-Admitted. *)
 
 
 Lemma PAAsImplies_false: forall {V : Set} `{EqDec_eq V} {d} {C : Formula V} ,

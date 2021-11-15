@@ -344,6 +344,59 @@ pose (rp_trans H2 H3) as H4.
 eapply rp_trans; [idtac | eapply rp_contra]; eauto.
 Qed.
 
+Ltac breakAssumpt1:=
+  match goal with
+  | [h0 : match ?exp with _ => _ end = _ |- _ ] => 
+    let heq := fresh "heq" in
+    destruct exp eqn:heq; try discriminate; try contradiction
+  end.
+Ltac try_injection :=
+    match goal with
+    | [h : Some _ = Some _ |- _] =>
+      injection h; intros; subst; eauto;  generalize h; clear h;
+      try_injection;
+      intro h
+    | _ => idtac
+    end.
+  
+
+Theorem PA_consistent_with_A':
+  forall {f pa g q},
+    ClauseByPAssignment f pa = Some q ->
+    (forall x t, 
+        PA pa x = Some t ->
+        PA pa x = Some (g x)
+      ) ->
+      ClauseByPAssignment f pa = Some (ClauseByAssignment f g).
+  intros f.
+  induction f; intros pa g q h0 h1;  subst; cbn in *; subst; eauto; 
+  repeat breakAssumpt1; try_injection; subst; eauto.
+  pose (IHf _ _ _ heq0 h1) as E.
+  try rewrite heq in *; try rewrite heq0 in *; eauto; try_injection; eauto.
+  assert (LiteralByAssignment a g = b) as HeqAssert1;
+  subst; try (rewrite HeqAssert1 in *; rewrite HeqAssert2 in *; auto; eauto; fail); try auto.
+  unfold LiteralByPAssignment in *;
+  unfold LiteralByAssignment in *;
+  repeat breakAssumpt1; cbn in *; try_injection; auto. 
+  + pose (h1 _ _ heq) as h11; try rewrite heq in *; eauto; try_injection; subst; eauto.
+  + pose (h1 _ _ heq2) as h11; try rewrite heq2 in *; eauto; try_injection; subst; eauto.
+Qed. 
+
+Theorem PA_consistent_with_A0:
+  forall {f pa g q},
+    CNFByPAssignment f pa = Some q ->
+    (forall x t, 
+        PA pa x = Some t ->
+        PA pa x = Some (g x)
+      ) ->
+      CNFByPAssignment f pa = Some (CNFByAssignment f g).
+  intros f. 
+  induction f; intros pa g q h0 h1; cbn in *; subst; eauto.
+  repeat breakAssumpt1; try_injection; subst; eauto.
+  erewrite PA_consistent_with_A' in heq; eauto; try_injection; subst; eauto.
+  pose (IHf _ _ _ heq0 h1) as heqhf; rewrite heq0 in heqhf; try_injection;subst; eauto.
+Qed.
+
 Theorem PA_consistent_with_A:
   forall {f pa g},
     CNFByPAssignment f pa <> None ->
@@ -352,7 +405,20 @@ Theorem PA_consistent_with_A:
         PA pa x = Some (g x)
       ) ->
       CNFByPAssignment f pa = Some (CNFByAssignment f g).
-Admitted.
+
+  intros f pa g H0 H1.
+  assert (forall x t, 
+    PA pa x = Some t ->
+    PA pa x = Some (g x)) as H2.
+  + intros x t h. eapply H1; subst; rewrite h in *; eauto.
+    try discriminate.
+  + 
+  destruct (CNFByPAssignment f pa) eqn:H3;
+  try (try rewrite H3 in H0; try discriminate; try contradiction; fail).
+  pose (PA_consistent_with_A0 H3 H2) as res; eauto.
+  rewrite H3 in *; try_injection; eauto.
+Qed.
+  
 
 Definition extendPA (pa : PAssignment V) : Assignment V := 
   fun v =>

@@ -8,6 +8,8 @@ Require Import src.rproof.
 Require Import Coq.Classes.Equivalence.
 Require Import Coq.Classes.EquivDec.
 Require Import Coq.Logic.Decidable.
+Require Import Coq.Lists.List.
+Require Import Coq.micromega.Lia.
 
 Open Scope type_scope.
 Open Scope list_scope.
@@ -436,9 +438,24 @@ Corollary PA_consistent_with_ExtendedA:
 Qed.
 
 
+(* Make higher order assignment into 
+    First order data.
+*)
+(* Definition allfalse: Assignment V := fun _ => false.
+Definition newAssignment   {V : Set} `{EqDec_eq V} v b f : (Assignment V) :=
+  fun k =>
+    match (eq_dec k v) with
+    | left _ => b
+    | right _ => f k
+    end.
+Inductive TruthTable : (Assignment V) -> Set :=
+| empty_tb : TruthTable allfalse
+| assign_fa : forall {f} (v : V) (b : bool), 
+  TruthTable f -> 
+  TruthTable (newAssignment v b f). *)
 
 
-Definition succeed_AS_spec: forall {f g d s},
+(* Definition succeed_AS_spec: forall {f g d s},
   AS f ((g, d) ::s) ->
   CNFByPAssignment f d = Some true ->
   {g2 | CNFByAssignment f g2 = true}.
@@ -447,7 +464,18 @@ assert (CNFByPAssignment f d <> None) as H2. repeat rewrite H1 in *.
 intro; try discriminate; try contradiction.
 pose (PA_consistent_with_ExtendedA H2) as H3.
 rewrite H3 in H1. inversion H1; subst; eauto.
+Qed. *)
+
+Definition succeed_AS_spec: forall {f g d s},
+  AS f ((g, d) ::s) ->
+  CNFByPAssignment f d = Some true ->
+  {g2  | CNFByPAssignment f g2 = Some true}.
+intros f g d s H0 H1. 
+exists d; eauto.
 Qed.
+
+Print succeed_AS_spec.
+
 
 
 
@@ -523,8 +551,27 @@ Definition FinalAS  {f s} (st : AS f s) := FailedState st + {SucceedState st} .
       g is the learned clauses
       s is the current assignment stack
 *)
-Definition CDCLState  (f : CNF V) :=  
-  {learned & {s & (AS (learned ++ f) s) * RProof (CNFFormula f) (CNFFormula learned)} }. 
+
+
+Axiom rp_cnf_weaken: forall {g f},
+  RProof (CNFFormula (g ++ f)) (CNFFormula f).
+
+Axiom rp_cnf_conj: forall {f g h},
+  RProof (CNFFormula f) (CNFFormula g) ->
+  RProof (CNFFormula f) (CNFFormula h) ->
+  RProof (CNFFormula f) (CNFFormula (g ++ h)).
+
+Definition CDCLState  (f learned: CNF V)  :=  
+  {s & (AS (learned ++ f) s) * RProof (CNFFormula f) (CNFFormula learned)}.
+
+Lemma all_clause_are_derivable: forall {f l},
+  CDCLState f l ->
+  RProof (CNFFormula f) (CNFFormula (l ++ f)).
+
+  intros f l h.
+  destruct h as [st [h1 h2]].
+  eapply rp_cnf_conj; eauto.
+Qed.
 
 (* This learned clause is not only useful for learning/forgetting
     But it is also useful for unit-prop, because the current unit-prop
@@ -533,18 +580,18 @@ Definition CDCLState  (f : CNF V) :=
     and then forgetting, this gives us a better unit-prop  
 *)
 
-Definition SucceedState  {f} (st : CDCLState f) : Prop := 
+Definition SucceedState  {f l} (st : CDCLState f l) : Prop := 
   match st with
-  | existT _ _ (existT _ s _) =>
+  | existT _ s _ =>
     match s with
     | (_, d) :: _ => CNFByPAssignment f d = Some true
     | _ => False
     end
   end.
 
-Definition FailedState  {f} (st : CDCLState f) : Prop := 
+Definition FailedState  {f l} (st : CDCLState f l) : Prop := 
     match st with
-    | existT _ _ (existT _ s _) =>
+    | existT _ s _ =>
       match s with
       | (_, d) :: nil => CNFByPAssignment f d = Some false
       | _ => False
@@ -552,13 +599,103 @@ Definition FailedState  {f} (st : CDCLState f) : Prop :=
     end.
 
 
+Definition ConflictingState  {f l} (st : CDCLState f l) : Prop := 
+      match st with
+      | existT _ s _ =>
+        match s with
+        | (_, d) :: _ => CNFByPAssignment f d = Some false
+        | _ => False
+        end
+      end.
+
+Definition FinalState {f l} (st : CDCLState f l) :=
+  SucceedState st \/ FailedState st.
+
 Definition FinalState_Dec:
-  forall {f} (st : CDCLState f),
-    {SucceedState st} + {FailedState st} + {~ (SucceedState st) /\ ~ (FailedState st)}.
+  forall {f l} (st : CDCLState f l),
+    {SucceedState st} + {FailedState st} + {~ FinalState st}.
+Admitted.
+
+Definition ConflictingState_Dec:
+  forall {f l} (st : CDCLState f l),
+    {ConflictingState st} + {~ ConflictingState st}.
 Admitted.
 
 
-(* The invariant here for (k : CDCLState f)
+
+
+Theorem SucceedSt_extract:
+  forall {f l} (st : CDCLState f l), 
+    SucceedState st ->
+    {g2 | CNFByPAssignment f g2 = Some true}.
+
+  unfold SucceedState. intros.
+  destruct st as [s  other].
+  destruct s; cbn in *; try contradiction. 
+  destruct p. eauto.
+Qed.
+
+Theorem find_false_clause':
+  forall {f : CNF V} {a h t},
+    f = h :: t ->
+    CNFByPAssignment f a = Some false ->
+    {ClauseByPAssignment h a = Some false} +
+    {CNFByPAssignment t a = Some false}.
+  intros f. induction f; intros assign h t h0 h1; try contradiction; try discriminate.
+  cbn in *.
+  repeat breakAssumpt1. injection h0; intros; subst; eauto.
+  destruct b; destruct b0; subst; eauto; cbn in *; try contradiction; try discriminate; eauto.
+Qed.
+
+
+Theorem find_false_clause:
+  forall {f : CNF V} {a h t},
+    f = h :: t ->
+    CNFByPAssignment f a = Some false ->
+    {i | ClauseByPAssignment (nth i f nil) a = Some false /\ i < length f}.
+    intros f. induction f;intros assign h t h0 h1; try contradiction; try discriminate.
+    injection h0; intros; subst; eauto.
+    destruct (find_false_clause' h0 h1).
+    + exists 0; cbn in *; split; eauto. lia.
+    + destruct t; try (cbn in *; try contradiction; try discriminate; fail).
+      destruct (IHf _ _ _ eq_refl e) as [i' [hi1 hi2]].
+      exists (S i'); cbn in *; split; eauto. lia.
+Qed.
+
+Axiom rp_cnf_weaken3: forall {index f},
+  index < length f ->
+  RProof (CNFFormula f) (ClauseFormula (nth index f nil)).
+
+Axiom rp_contra0: forall {C},
+  RProof (fconj C (fneg C)) fbot.
+
+Theorem FailedSt_extract:
+  forall {f l} (st : CDCLState f l), 
+  f <> nil ->
+  FailedState st ->
+  RProof (CNFFormula f) fbot.
+
+  unfold FailedState. intros.  pose st as org_st.
+  destruct f; try contradiction.
+  destruct st as [s other].
+  destruct s; try contradiction.
+  destruct p as [other2 d].
+  destruct s; try contradiction.
+  destruct (find_false_clause eq_refl H1)
+    as [index [h1 h2]].
+  pose (rp_cnf_weaken3 h2) as r.
+  pose (rp_byassign2 h1) as r0.
+  eapply rp_trans; [idtac | eapply rp_contra0].
+  eapply rp_rconj; [eauto | idtac ].
+  eapply rp_trans; [idtac | eapply r0].
+  eapply rp_trans; [eapply (all_clause_are_derivable org_st) |idtac].
+  destruct other as [theAS r00].
+  assert (other2 = ∅); [eapply AS_no_guessing; eauto | idtac]; subst.
+  pose (AssignmentStackHasRProof theAS) as res. cbn in res.
+  eapply rp_trans;[idtac| exact res]; eauto.
+Qed.
+
+  (* The invariant here for (k : CDCLState f)
   1. if SucceedState k  
       then assignment from k can evaluate f into true
   2. if FailedState k
@@ -574,17 +711,129 @@ Admitted.
     non-determinstic transition in a (CDCL f) world
 *)
 
+
+
+Definition lift_AS_op  
+  (f : forall {L}, {s1 & AS L s1} -> {s2 & AS L s2}): forall {F L}, CDCLState F L -> CDCLState F L.
+  intros F L st.
+  destruct st as [s1 [as1 other]].
+  destruct (f _ (existT _ s1 as1)) as [s2 as2].
+  exact  (existT _ s2 (as2, other)).
+Qed.
+
 (* One step unit-prop spec*)
+
+(* 
+  unit_prop_AS_spec:
+  forall  {l c g d s f x b},
+
+    AS ((l::c)::f) ((g,d) :: s) -> 
+    l = ToLiteral x b ->
+    (* eval C under d = false -> *)
+    ClauseByPAssignment c d = Some false ->
+    (* PA d l = None -> *)
+    forall (h : PA d x = None),
+    AS ((l::c)::f) ((g,d[x := b]h) :: s).
+*)
+
 
 (* UnitProp until cannot spec*)
 
+
+
 (* Guess One Literal spec*)
+
+(*
+
+decide_AS_spec  {f g d s} x b 
+  (stack : AS f ((g, d)::s)) 
+  (h : PA d x = None) :
+  AS f (((g[x := b](AssignmentStackGSubD2 stack _ h)), d[x:=b] h)::(g,d)::s).
+
+*)
 
 (* Check Success spec*)
 
+
+(*
+succeed_AS_spec: forall {f g d s},
+  AS f ((g, d) ::s) ->
+  CNFByPAssignment f d = Some true ->
+  {g2 | CNFByAssignment f g2 = true}
+*)
+
+
 (* Check Failure spec*)
 
+(*
+
+fail_AS_spec: forall {c f g d},
+  AS (c::f) ((g, d) ::nil) ->
+  ClauseByPAssignment c d = Some false ->
+  RProof (CNFFormula (c:: f)) fbot.
+
+  *)
+
 (* Back Jump spec*)
+
+(*
+
+
+backjump_AS_spec: forall  {f C k g d s l} x b,
+  AS f (k ++ (g,d) :: s) -> 
+  l = ToLiteral x b ->
+  (* f ⊧ C ∨ l*)
+  RProof (CNFFormula f) (fdisj C (flit l)) ->
+  (* eval C under d = false -> *)
+  FormulaByPAssignment C d = Some false ->
+  (* PA d l = None -> *)
+  forall (h : PA d x = None),
+  AS f ((g,d[x := b]h) :: s).
+
+*)
+
+
+(*
+change_goal:
+  forall  {g} {s} (f : CNF V),
+    AssignmentStack g s ->
+    RProof (CNFFormula f) (CNFFormula g) ->
+    AssignmentStack f s.
+*)
+
+
+(* Learn New Clause *)
+Definition learn_CS_spec0 {f learned g}
+  (h0 : RProof (CNFFormula (learned ++ f)) (CNFFormula g))
+  (h1 : CDCLState f learned):
+  CDCLState f (g ++ learned).
+  destruct h1 as [s1 [as1 proof1]].
+  eexists. split.
+  (* Constructing AS using change goal*)
+  + rewrite <- List.app_assoc.
+    eapply change_goal; [idtac | eapply rp_cnf_weaken]; eauto.
+  (* Constructing RProof using rproof *)
+  + eapply rp_cnf_conj;
+    [idtac | eauto].
+    eapply rp_trans;
+    [idtac | eauto].
+    eapply rp_cnf_conj; eauto.
+Qed.
+  
+
+(* One loop of Basic CDCL *)
+Definition BasicCDCLOneStep {f l: CNF V} (st : CDCLState f l) (fuel : nat) :
+{l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
++ {g | CNFByAssignment f g = true} 
++ RProof (CNFFormula f) fbot.
+Admitted.
+
+(* The main Procedure to be extract *)
+Definition BasicCDCLAlg {f l: CNF V} (st : CDCLState f l) (fuel : nat) :
+  {l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
+  + {g | CNFByAssignment f g = true} 
+  + RProof (CNFFormula f) fbot.
+Admitted.
 
 
 (* Now we need to really model
@@ -594,6 +843,10 @@ Admitted.
       the above 5 specification functions
   and then prove the transition above will give
     some good property on termination
+*)
+
+(*
+ Full 
 *)
 
 End CDCLtransition.

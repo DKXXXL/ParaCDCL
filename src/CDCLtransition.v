@@ -553,13 +553,7 @@ Definition FinalAS  {f s} (st : AS f s) := FailedState st + {SucceedState st} .
 *)
 
 
-Axiom rp_cnf_weaken: forall {g f},
-  RProof (CNFFormula (g ++ f)) (CNFFormula f).
 
-Axiom rp_cnf_conj: forall {f g h},
-  RProof (CNFFormula f) (CNFFormula g) ->
-  RProof (CNFFormula f) (CNFFormula h) ->
-  RProof (CNFFormula f) (CNFFormula (g ++ h)).
 
 Definition CDCLState  (f learned: CNF V)  :=  
   {s & (AS (learned ++ f) s) * RProof (CNFFormula f) (CNFFormula learned)}.
@@ -708,12 +702,7 @@ Theorem find_false_clause:
       exists (S i'); cbn in *; split; eauto. lia.
 Qed.
 
-Axiom rp_cnf_weaken3: forall {index f},
-  index < length f ->
-  RProof (CNFFormula f) (ClauseFormula (nth index f nil)).
 
-Axiom rp_contra0: forall {C},
-  RProof (fconj C (fneg C)) fbot.
 
 Theorem FailedSt_extract:
   forall {f l} (st : CDCLState f l), 
@@ -786,30 +775,6 @@ Defined.
   + pose (nth_error_overbound heq0); lia.
 Defined. *)
 
-Fixpoint nthsafe {A} (n:nat) (l:list A) (h : n < length l) {struct l} : A.
-  destruct n eqn:heqn;
-    destruct l eqn:heql; cbn in *; try lia.
-    exact a.
-    assert (n0 < length l0) as hlt; try lia.
-    exact (nthsafe _ n0 l0 hlt); auto.
-Defined.
-
-Lemma nthsafe_ntherror:
-  forall {A} {l : list A} {n} h1,
-    nth_error l n = Some (nthsafe n l h1).
-  intros A l. induction l; intros; subst; try (cbn in *; eauto; try lia; fail).
-  destruct n; cbn in *; eauto.
-Qed. 
-
-Lemma nthsafe_red:
-  forall A n (a:A) l h1 h2,
-  nthsafe (S n) (a :: l) h1 = nthsafe n l h2.
-  intros.
-  assert (nth_error  (a :: l) (S n) = nth_error l n) as HEQ; try (cbn in *; try reflexivity; fail).
-  rewrite (nthsafe_ntherror h1) in HEQ.
-  rewrite (nthsafe_ntherror h2) in HEQ.
-  injection HEQ; auto.
-Qed.
 
 
 Definition UnitClause (c : Clause V) a :=
@@ -867,6 +832,8 @@ Theorem find_index {A:Type} (f : A -> bool) (l : list A) :
 
 
 
+
+(* We postulate the following axio m for computation, which makes things easier*)
 
 
 Axiom UnitClauseComputable0:
@@ -940,19 +907,6 @@ Theorem partition (f : A -> bool) (l : list A):
   } 
 *)
 
-(* We postulate the following axiom for computation, which makes things easier*)
-(* Axiom UnitClause_Counting0:
-  forall {c a},
-  UnitClause c a ->
-  length (filter (fun x => isNone (LiteralByPAssignment x a)) c) = 1 /\
-  length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1.
-
-Theorem UnitClause_Counting1:
-  forall {c a},
-  c <> nil ->
-  length (filter (fun x => isNone (LiteralByPAssignment x a)) c) = 1 /\
-  length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1 ->
-  UnitClause c a. *)
 
 
 
@@ -989,12 +943,6 @@ Qed.
     AS ((l::c)::f) ((g,d[x := b]h) :: s).
 *)
 
-Axiom rp_unitprop:
-  forall (c : Clause V) i d (h : i < length c),
-    (forall j (h' : j < length c), 
-      j <> i ->
-      LiteralByPAssignment (nthsafe j c h') d = Some false) ->
-    RProof (fconj (ClauseFormula c) (LiteralsFormPA d)) (flit (nthsafe i c h)).
 
 Theorem UnitClause_AS_spec:
   forall  {c f g d s x b} (u : UnitClause c d),

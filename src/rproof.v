@@ -2,6 +2,8 @@ Require Import Coq.Classes.Equivalence.
 Require Import Coq.Classes.EquivDec.
 Require Import Coq.Logic.Decidable.
 Require Import Coq.Logic.Eqdep_dec.
+Require Import Coq.Lists.List.
+Require Import Coq.micromega.Lia.
 (* Here we construct the relationship between  *)
 
 
@@ -245,6 +247,32 @@ So RProof is always a CNF => Conjunction of literals
     there is also other chapters about prove by reflection
 *)
 
+Fixpoint nthsafe {A} (n:nat) (l:list A) (h : n < length l) {struct l} : A.
+  destruct n eqn:heqn;
+    destruct l eqn:heql; cbn in *; try lia.
+    exact a.
+    assert (n0 < length l0) as hlt; try lia.
+    exact (nthsafe _ n0 l0 hlt); auto.
+Defined.
+
+Lemma nthsafe_ntherror:
+  forall {A} {l : list A} {n} h1,
+    nth_error l n = Some (nthsafe n l h1).
+  intros A l. induction l; intros; subst; try (cbn in *; eauto; try lia; fail).
+  destruct n; cbn in *; eauto.
+Qed. 
+
+Lemma nthsafe_red:
+  forall A n (a:A) l h1 h2,
+  nthsafe (S n) (a :: l) h1 = nthsafe n l h2.
+  intros.
+  assert (nth_error  (a :: l) (S n) = nth_error l n) as HEQ; try (cbn in *; try reflexivity; fail).
+  rewrite (nthsafe_ntherror h1) in HEQ.
+  rewrite (nthsafe_ntherror h2) in HEQ.
+  injection HEQ; auto.
+Qed.
+
+
 Inductive RProof {V: Set} `{EqDec_eq V}: Formula V -> Formula V -> Set :=
   | rp_id : forall x, RProof x x
   | rp_trans : forall {x y z},
@@ -304,6 +332,28 @@ Inductive RProof {V: Set} `{EqDec_eq V}: Formula V -> Formula V -> Set :=
       forall {X Y Z : Formula V},
       RProof X (fdisj Y Z) ->
       RProof X (fdisj Z Y).
+
+Axiom rp_cnf_weaken: forall {V: Set} `{EqDec_eq V} {g f : CNF V},
+  RProof (CNFFormula (g ++ f)) (CNFFormula f).
+
+Axiom rp_cnf_conj: forall {V: Set} `{EqDec_eq V} {f g h : CNF V},
+  RProof (CNFFormula f) (CNFFormula g) ->
+  RProof (CNFFormula f) (CNFFormula h) ->
+  RProof (CNFFormula f) (CNFFormula (g ++ h)).
+
+Axiom rp_cnf_weaken3: forall {V: Set} `{EqDec_eq V} {index} {f : CNF V},
+  index < length f ->
+  RProof (CNFFormula f) (ClauseFormula (nth index f nil)).
+
+Axiom rp_contra0: forall {V: Set} `{EqDec_eq V} {C : Formula V},
+  RProof (fconj C (fneg C)) fbot.
+
+Axiom rp_unitprop:
+  forall {V: Set} `{EqDec_eq V} (c : Clause V) i d (h : i < length c),
+    (forall j (h' : j < length c), 
+      j <> i ->
+      LiteralByPAssignment (nthsafe j c h') d = Some false) ->
+    RProof (fconj (ClauseFormula c) (LiteralsFormPA d)) (flit (nthsafe i c h)).
 
 
 Definition rproofByAssignment :=

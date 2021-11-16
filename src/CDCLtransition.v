@@ -790,6 +790,25 @@ Theorem UnitClause_AS_spec:
     AS (c::f) ((g,d[x := b]h) :: s).
 Admitted.
 
+Definition NoUnitClause 
+  (C : CNF V) 
+  (atrail : list (PAssignment V * PAssignment V)) 
+  (h2 : atrail <> nil) : Prop.
+  destruct atrail as [_ | h t]; subst; eauto; try contradiction; try discriminate.
+  destruct h as [g d].
+  exact (
+    forall i (h : i < length C), UnitClause (nthsafe i C h) d -> False).
+  Defined.
+Theorem vanilla_propagate_all_unit_clause:
+  forall (C : CNF V) {trail},
+  AS C trail ->
+  {trail2 & 
+    AS C trail2 *
+    { h : trail2 <> nil |
+    NoUnitClause C trail2 h}}.
+  
+Admitted.
+
 
 (* UnitProp until cannot spec*)
 
@@ -877,21 +896,36 @@ Definition learn_CS_spec0 {f learned g}
 Qed.
   
 
-(* One loop of Basic CDCL *)
-Definition BasicCDCLOneStep {f l: CNF V} (st : CDCLState f l):
+(* One loop of Vanilla CDCL *)
+Definition VanillaCDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil):
 {l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
-+ {g | CNFByAssignment f g = true} 
++ {g | CNFByPAssignment f g =  Some true} 
 + RProof (CNFFormula f) fbot.
 destruct (FinalState_Dec st) as [[H1 | H2] | H3].
-+ left. right. eapply  SucceedSt_extract; eauto.
-
++ left. right. eapply SucceedSt_extract; eauto.
++ right. eapply  FailedSt_extract; eauto.
++  
+ (* Main function starts here  *)
+ (* First Do All the Unit Propagation *)
+    pose (vanilla_propagate_all_unit_clause)
+    (* If conflict happens *)
+      (* check if failure state *)
+          (* if failure, uses failure extract *)
+          (* if not *)
+            (* Do conflict analysis to get a new learned clause *)
+            (* Do trivial back track *)
+    (* If no conflict *)
+      (* guess arbitrary, 
+         check fully assigned or not *)
+        (* if it is fully assigned, then success extract*)
+        (* If it is not return this  *)
 
 
 
 (* The main Procedure to be extract *)
-Definition BasicCDCLAlg {f l: CNF V} (st : CDCLState f l) (fuel : nat) :
+Definition VanillaCDCLAlg {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (fuel : nat) :
   {l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
-  + {g | CNFByAssignment f g = true} 
+  + {g | CNFByPAssignment f g = Some true} 
   + RProof (CNFFormula f) fbot.
 Admitted.
 

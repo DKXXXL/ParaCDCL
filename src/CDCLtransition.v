@@ -888,7 +888,18 @@ backjump_AS_spec: forall  {f C k g d s l} x b,
 *)
 
 
-(*
+Definition vanilla_conflicting_analysis:
+  forall {f fh ft l} {st : CDCLState f l} (h : f = fh :: ft)
+    (H0 :ConflictingState st),
+    {l2 & RProof (CNFFormula f) l2}.
+  unfold ConflictingState.
+  intros. destruct st as [s [h1 h2]].
+  destruct s as [_ | [g d] t]; try contradiction.
+  destruct (find_false_clause h H0) as [i [H1 H2]].
+  eexists.
+  eapply rp_trans; [idtac| eapply rp_byassign2; eauto].
+Admitted.
+  (*
 change_goal:
   forall  {g} {s} (f : CNF V),
     AssignmentStack g s ->
@@ -916,7 +927,9 @@ Definition learn_CS_spec0 {f learned g}
 Qed.
   
 
-(* One loop of Vanilla CDCL *)
+(* One loop of Vanilla CDCL 
+    Which is basically DPLL anyway
+*)
 Definition VanillaCDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil):
 {l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
 + {g | CNFByPAssignment f g =  Some true} 
@@ -937,10 +950,12 @@ destruct (FinalState_Dec st) as [[H1 | H2] | H3].
         +++ left. left. exists l. exists st2. unfold FinalState. intro FS; destruct FS; try contradiction.
 
     (* If conflict happens *)
-    ++ destruct (FailedState_Dec st2) as
+    ++ destruct (FailedState_Dec st2).
       (* check if failure state *)
           (* if failure, uses failure extract *)
+          +++ right. eapply (FailedSt_extract st2); eauto.  
           (* if not *)
+          +++ left. left. eexists. pose (vanilla_conflicting_analysis )  
             (* Do conflict analysis to get a new learned clause *)
             (* Do trivial back track *)
 

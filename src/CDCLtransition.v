@@ -611,19 +611,49 @@ Definition ConflictingState  {f l} (st : CDCLState f l) : Prop :=
 Definition FinalState {f l} (st : CDCLState f l) :=
   SucceedState st \/ FailedState st.
 
+Ltac try_both_side:=
+  try (left; eauto; try contradiction; try discriminate; fail);
+  try (right; eauto; try contradiction; try discriminate; fail).
+
 Definition SucceedState_Dec {f l} (st : CDCLState f l):
   {SucceedState st} + {~SucceedState st}.
-Admitted.
+destruct st as [st1 st2]. cbn in *.
+destruct st1 as [_ | [g d] t];try_both_side.
+destruct (CNFByPAssignment f d); try_both_side.
+destruct b; try_both_side.
+Qed.
 
 Definition FailedState_Dec {f l} (st : CDCLState f l):
   {FailedState st} + {~FailedState st}.
-Admitted.
+destruct st as [st1 st2]. cbn in *.
+destruct st1 as [_ | [g d] t];try_both_side.
+destruct t; try_both_side.
+destruct (CNFByPAssignment f d); try_both_side.
+destruct b; try_both_side.
+Qed.
+
+
+Ltac try_all_branch :=
+  match goal with
+  | [|- _ + {_}] =>
+    try (left;try_all_branch; eauto; try contradiction; try discriminate; fail);
+    try (right;try_all_branch; eauto; try contradiction; try discriminate; fail)
+
+  |  [|- {_} + {_}] => 
+    try (left;try_all_branch; eauto; try contradiction; try discriminate; fail);
+    try (right;try_all_branch; eauto; try contradiction; try discriminate; fail)
+  | _ => idtac
+  end.
+
 
 Definition FinalState_Dec:
   forall {f l} (st : CDCLState f l),
     {SucceedState st} + {FailedState st} + {~ FinalState st}.
-Admitted.
-
+intros. unfold FinalState.
+destruct (SucceedState_Dec st); try_all_branch.
+destruct (FailedState_Dec st); try_all_branch.
+right. intro H0. destruct H0; try contradiction.
+Qed.
 
 
 Definition ConflictingState_Dec:
@@ -916,16 +946,37 @@ Definition learn_CS_spec0 {f learned g}
   CDCLState f (g ++ learned).
   destruct h1 as [s1 [as1 proof1]].
   eexists. split.
-  (* Constructing AS using change goal*)
-  + rewrite <- List.app_assoc.
-    eapply change_goal; [idtac | eapply rp_cnf_weaken]; eauto.
-  (* Constructing RProof using rproof *)
-  + eapply rp_cnf_conj;
-    [idtac | eauto].
-    eapply rp_trans;
-    [idtac | eauto].
-    eapply rp_cnf_conj; eauto.
+    (* Constructing AS using change goal*)
+    + rewrite <- List.app_assoc.
+      eapply change_goal; [idtac | eapply rp_cnf_weaken]; eauto.
+    (* Constructing RProof using rproof *)
+    + eapply rp_cnf_conj;
+      [idtac | eauto].
+      eapply rp_trans;
+      [idtac | eauto].
+      eapply rp_cnf_conj; eauto.
+Defined.
+
+Definition learn_CS_spec1 {f learned g}
+  (h0 : RProof (CNFFormula (learned ++ f)) (CNFFormula g))
+  (h1 : CDCLState f learned):
+  {st2 : CDCLState f (g ++ learned)
+    | projT1 st2 = projT1 h1
+    }.
+  exists (learn_CS_spec0 h0 h1). 
+  unfold learn_CS_spec0. 
+  destruct h1 as [s1 p].
+  destruct p as [as1 proof1]. cbn in *. auto.
 Qed.
+
+
+Ltac breakAssumpt2:=
+  match goal with
+  | [h0 : context[match ?exp with _ => _ end] |- _ ] => 
+    let heq := fresh "heq" in
+    destruct exp eqn:heq; try discriminate; try contradiction
+  end.
+
   
 
 (* One loop of Vanilla CDCL 
@@ -962,8 +1013,16 @@ destruct (FinalState_Dec st) as [[H1 | H2] | H3].
             (* Do trivial back track *)
             left. left. 
             destruct (vanilla_conflicting_analysis h  hcflict) as [l2 hl2].
-            pose (learn_CS_spec0 hl2 st2) as hst2.
-            exists (l2 ++ l). exists hst2.  admit.
+            destruct (learn_CS_spec1 hl2 st2) as [hst2 hst2info].
+            exists (l2 ++ l). exists hst2. intro hF.
+            unfold FinalState in *; unfold ConflictingState in *; cbn in *.
+            destruct st2 as [st21 st22]; 
+            destruct hst2 as [hst21 hst22]; cbn in *;
+            repeat breakAssumpt2.
+            inversion hst2info; intros; subst; eauto.
+            try rewrite hcflict in hF. destruct hF; try discriminate; try contradiction.
+Qed.  
+
 
 
          

@@ -883,7 +883,7 @@ Definition BasicCDCLOneStep {f l: CNF V} (st : CDCLState f l):
 + {g | CNFByAssignment f g = true} 
 + RProof (CNFFormula f) fbot.
 destruct (FinalState_Dec st) as [[H1 | H2] | H3].
-+ 
++ left. right. eapply  SucceedSt_extract; eauto.
 
 
 

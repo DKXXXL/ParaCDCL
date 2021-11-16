@@ -611,10 +611,20 @@ Definition ConflictingState  {f l} (st : CDCLState f l) : Prop :=
 Definition FinalState {f l} (st : CDCLState f l) :=
   SucceedState st \/ FailedState st.
 
+Definition SucceedState_Dec {f l} (st : CDCLState f l):
+  {SucceedState st} + {~SucceedState st}.
+Admitted.
+
+Definition FailedState_Dec {f l} (st : CDCLState f l):
+  {FailedState st} + {~FailedState st}.
+Admitted.
+
 Definition FinalState_Dec:
   forall {f l} (st : CDCLState f l),
     {SucceedState st} + {FailedState st} + {~ FinalState st}.
 Admitted.
+
+
 
 Definition ConflictingState_Dec:
   forall {f l} (st : CDCLState f l),
@@ -790,23 +800,33 @@ Theorem UnitClause_AS_spec:
     AS (c::f) ((g,d[x := b]h) :: s).
 Admitted.
 
-Definition NoUnitClause 
-  (C : CNF V) 
-  (atrail : list (PAssignment V * PAssignment V)) 
-  (h2 : atrail <> nil) : Prop.
+Definition NoUnitClause {f l}
+  (st : CDCLState f l) 
+  (* (atrail : list (PAssignment V * PAssignment V)) 
+  (h2 : atrail <> nil)  *)
+  : Prop.
+  destruct st as [atrail [AT rp]].
   destruct atrail as [_ | h t]; subst; eauto; try contradiction; try discriminate.
-  destruct h as [g d].
-  exact (
-    forall i (h : i < length C), UnitClause (nthsafe i C h) d -> False).
+  + inversion AT.
+  + destruct h as [g d].
+    exact (
+      forall i (h : i < length f), UnitClause (nthsafe i f h) d -> False).
   Defined.
-Theorem vanilla_propagate_all_unit_clause:
+
+
+
+(* Theorem vanilla_propagate_all_unit_clause:
   forall (C : CNF V) {trail},
   AS C trail ->
   {trail2 & 
     AS C trail2 *
     { h : trail2 <> nil |
-    NoUnitClause C trail2 h}}.
+    NoUnitClause C trail2 h}}. *)
   
+Theorem vanilla_propagate_all_unit_clause:
+    forall {f l} (st : CDCLState f l),
+    {st2 : CDCLState f l | NoUnitClause st2 /\ ~FailedState st2}
+    + {st2 : CDCLState f l | ConflictingState st2}.
 Admitted.
 
 
@@ -904,21 +924,26 @@ Definition VanillaCDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil):
 destruct (FinalState_Dec st) as [[H1 | H2] | H3].
 + left. right. eapply SucceedSt_extract; eauto.
 + right. eapply  FailedSt_extract; eauto.
-+  
++ 
  (* Main function starts here  *)
  (* First Do All the Unit Propagation *)
-    pose (vanilla_propagate_all_unit_clause)
+    destruct (vanilla_propagate_all_unit_clause st) as [[st2 [hnuc hnfail]] | [st2 hfail]].
+    ++  (* If no conflict *)
+      (* check fully assigned or not *)
+      destruct (SucceedState_Dec st2).
+        (* if it is fully assigned, then success extract*)
+        +++ left. right. eapply (SucceedSt_extract st2); eauto. 
+        (* If it is not return this  *)
+        +++ left. left. exists l. exists st2. unfold FinalState. intro FS; destruct FS; try contradiction.
+
     (* If conflict happens *)
+    ++ destruct (FailedState_Dec st2) as
       (* check if failure state *)
           (* if failure, uses failure extract *)
           (* if not *)
             (* Do conflict analysis to get a new learned clause *)
             (* Do trivial back track *)
-    (* If no conflict *)
-      (* guess arbitrary, 
-         check fully assigned or not *)
-        (* if it is fully assigned, then success extract*)
-        (* If it is not return this  *)
+
 
 
 

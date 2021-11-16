@@ -723,6 +723,52 @@ Qed.
 
 (* One step unit-prop spec*)
 
+
+
+Lemma nth_error_overbound:
+  forall {T}  {l : list T} {i}
+    (H0: nth_error l i = None),
+    i >= length l.
+  intros T l. induction l; intros; cbn in *; subst;  eauto.
+  lia. destruct i; subst; try contradiction; try discriminate.
+  cbn in *. pose (IHl _ H0). lia.
+Qed.
+
+Definition nthsafe {T} (i : nat) (l : list T) (h : i < length l) : T.
+  destruct (nth_error l i) eqn:heq0.
+  + exact t.
+  + pose (nth_error_overbound heq0); lia.
+Qed.
+
+
+Definition UnitClause (c : Clause V) a :=
+  {i & { h : i < length c |
+       LiteralByPAssignment (nthsafe i c h) a = None
+       /\ forall j (h2 : j < length c), 
+            j <> i -> 
+            LiteralByPAssignment (nthsafe j c h2) a = Some false
+  }}.
+
+Definition UnitClause_UnitLiteral {c a} (u : UnitClause c a) : Literal V.
+  destruct u as [i [h hh]].
+  exact (nthsafe i c h).
+Defined.
+
+
+Theorem UnitClauseLiteral_None {c a x b} (u : UnitClause c a):
+  UnitClause_UnitLiteral u = ToLiteral x b ->
+  PA a x = None.
+  unfold UnitClause_UnitLiteral.
+  intros H0. destruct u as [i [h [h1 h2]]]. 
+  destruct b; cbn in *; rewrite H0 in *; cbn in *; eauto.
+  repeat breakAssumpt1; eauto.
+Qed.
+
+Definition UnitClause_Dec:
+  forall (c : Clause V) a,
+    UnitClause c a + {UnitClause c a -> False}.
+Admitted.
+
 (* 
   unit_prop_AS_spec:
   forall  {l c g d s f x b},
@@ -736,8 +782,18 @@ Qed.
     AS ((l::c)::f) ((g,d[x := b]h) :: s).
 *)
 
+Theorem UnitClause_AS_spec:
+  forall  {c f g d s x b} (u : UnitClause c d),
+    AS (c::f) ((g,d) :: s) -> 
+    UnitClause_UnitLiteral u = ToLiteral x b ->
+    forall (h : PA d x = None),
+    AS (c::f) ((g,d[x := b]h) :: s).
+Admitted.
+
 
 (* UnitProp until cannot spec*)
+
+
 
 
 
@@ -822,11 +878,15 @@ Qed.
   
 
 (* One loop of Basic CDCL *)
-Definition BasicCDCLOneStep {f l: CNF V} (st : CDCLState f l) (fuel : nat) :
+Definition BasicCDCLOneStep {f l: CNF V} (st : CDCLState f l):
 {l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
 + {g | CNFByAssignment f g = true} 
 + RProof (CNFFormula f) fbot.
-Admitted.
+destruct (FinalState_Dec st) as [[H1 | H2] | H3].
++ 
+
+
+
 
 (* The main Procedure to be extract *)
 Definition BasicCDCLAlg {f l: CNF V} (st : CDCLState f l) (fuel : nat) :

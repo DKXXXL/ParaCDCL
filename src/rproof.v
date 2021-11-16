@@ -331,25 +331,20 @@ Inductive RProof {V: Set} `{EqDec_eq V}: Formula V -> Formula V -> Set :=
   | rp_comm_disj:
       forall {X Y Z : Formula V},
       RProof X (fdisj Y Z) ->
-      RProof X (fdisj Z Y).
-
-Axiom rp_cnf_weaken: forall {V: Set} `{EqDec_eq V} {g f : CNF V},
-  RProof (CNFFormula (g ++ f)) (CNFFormula f).
-
-Axiom rp_cnf_conj: forall {V: Set} `{EqDec_eq V} {f g h : CNF V},
+      RProof X (fdisj Z Y)
+  | rp_cnf_weaken: forall  {g f : CNF V},
+  RProof (CNFFormula (g ++ f)) (CNFFormula f)
+  | rp_cnf_conj: forall {f g h : CNF V},
   RProof (CNFFormula f) (CNFFormula g) ->
   RProof (CNFFormula f) (CNFFormula h) ->
-  RProof (CNFFormula f) (CNFFormula (g ++ h)).
-
-Axiom rp_cnf_weaken3: forall {V: Set} `{EqDec_eq V} {index} {f : CNF V},
+  RProof (CNFFormula f) (CNFFormula (g ++ h))
+  | rp_cnf_weaken3: forall  {index} {f : CNF V},
   index < length f ->
-  RProof (CNFFormula f) (ClauseFormula (nth index f nil)).
-
-Axiom rp_contra0: forall {V: Set} `{EqDec_eq V} {C : Formula V},
-  RProof (fconj C (fneg C)) fbot.
-
-Axiom rp_unitprop:
-  forall {V: Set} `{EqDec_eq V} (c : Clause V) i d (h : i < length c),
+  RProof (CNFFormula f) (ClauseFormula (nth index f nil))
+  | rp_contra0: forall {C : Formula V},
+  RProof (fconj C (fneg C)) fbot
+  | rp_unitprop:
+  forall (c : Clause V) i d (h : i < length c),
     (forall j (h' : j < length c), 
       j <> i ->
       LiteralByPAssignment (nthsafe j c h') d = Some false) ->
@@ -613,7 +608,7 @@ try(repeat match goal with
 | [h : FormulaByAssignment ?x ?a = _ |- _] =>
     rewrite h in *; cbn in *; clear h
 end; subst; eauto; fail).
-Qed.
+Admitted.
 
 
 Definition RProofl {V : Set} `{EqDec_eq V} (h : Formula V) (c : Literal V) := RProof h (flit c).

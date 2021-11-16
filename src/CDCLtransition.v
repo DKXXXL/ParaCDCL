@@ -474,7 +474,6 @@ intros f g d s H0 H1.
 exists d; eauto.
 Qed.
 
-Print succeed_AS_spec.
 
 
 

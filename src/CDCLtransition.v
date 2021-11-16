@@ -975,12 +975,6 @@ Theorem UnitClauseLiteral_None {c a x b} (u : UnitClause c a):
   repeat breakAssumpt1; eauto.
 Qed.
 
-Definition UnitClause_Dec:
-  forall (c : Clause V) a,
-    UnitClause c a + {UnitClause c a -> False}.
-intros c a. 
-destruct (eq_dec (length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c)) 1) as [heq | heq].
-+ left.  
 
 (* 
   unit_prop_AS_spec:
@@ -995,13 +989,32 @@ destruct (eq_dec (length (filter (fun x => isSomefalse (LiteralByPAssignment x a
     AS ((l::c)::f) ((g,d[x := b]h) :: s).
 *)
 
+Axiom rp_unitprop:
+  forall (c : Clause V) i d (h : i < length c),
+    (forall j (h' : j < length c), 
+      j <> i ->
+      LiteralByPAssignment (nthsafe j c h') d = Some false) ->
+    RProof (fconj (ClauseFormula c) (LiteralsFormPA d)) (flit (nthsafe i c h)).
+
 Theorem UnitClause_AS_spec:
   forall  {c f g d s x b} (u : UnitClause c d),
     AS (c::f) ((g,d) :: s) -> 
     UnitClause_UnitLiteral u = ToLiteral x b ->
     forall (h : PA d x = None),
     AS (c::f) ((g,d[x := b]h) :: s).
-Admitted.
+intros c f g d s x b u H0 H1 H2. eapply deduce_as; auto.
+destruct u as [index [h0 [h1 h2]]]; cbn in *.
+rewrite <- H1 in *.
+eapply rp_trans; [idtac | eapply rp_unitprop; eauto].
+assert (RProof 
+          (fconj
+            (fconj (ClauseFormula c)
+              (CNFFormula f))
+            (LiteralsFormPA g))
+            (ClauseFormula c)) as Hproof2; [eauto | idtac].
+eapply rp_rconj; [exact Hproof2 | idtac].
+pose (AssignmentStackHasRProof H0) as hproof1. cbn in *. eauto.
+Qed.
 
 Definition NoUnitClause {f l}
   (st : CDCLState f l) 
@@ -1183,7 +1196,6 @@ destruct (FinalState_Dec st) as [[H1 | H2] | H3].
           (* if not *)
           +++ 
             (* Do conflict analysis to get a new learned clause *)
-            (* Do trivial back track *)
             left. left. 
             destruct (vanilla_conflicting_analysis h  hcflict) as [l2 hl2].
             destruct (learn_CS_spec1 hl2 st2) as [hst2 hst2info].
@@ -1194,7 +1206,8 @@ destruct (FinalState_Dec st) as [[H1 | H2] | H3].
             repeat breakAssumpt2.
             inversion hst2info; intros; subst; eauto.
             try rewrite hcflict in hF. destruct hF; try discriminate; try contradiction.
-Qed.  
+            (* Do trivial back track *)
+            Admitted.
 
 
 

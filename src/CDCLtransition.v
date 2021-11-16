@@ -659,7 +659,13 @@ Qed.
 Definition ConflictingState_Dec:
   forall {f l} (st : CDCLState f l),
     {ConflictingState st} + {~ ConflictingState st}.
-Admitted.
+destruct st as [st1 st2]. cbn in *.
+destruct st1 as [_ | [g d] t];try_both_side.
+  
+destruct (CNFByPAssignment f d); try_both_side.
+destruct b; try_both_side.
+Qed.
+
 
 
 
@@ -772,12 +778,37 @@ Lemma nth_error_overbound:
   intros T l. induction l; intros; cbn in *; subst;  eauto.
   lia. destruct i; subst; try contradiction; try discriminate.
   cbn in *. pose (IHl _ H0). lia.
-Qed.
+Defined.
 
-Definition nthsafe {T} (i : nat) (l : list T) (h : i < length l) : T.
+(* Definition nthsafe {T} (i : nat) (l : list T) (h : i < length l) : T.
   destruct (nth_error l i) eqn:heq0.
   + exact t.
   + pose (nth_error_overbound heq0); lia.
+Defined. *)
+
+Fixpoint nthsafe {A} (n:nat) (l:list A) (h : n < length l) {struct l} : A.
+  destruct n eqn:heqn;
+    destruct l eqn:heql; cbn in *; try lia.
+    exact a.
+    assert (n0 < length l0) as hlt; try lia.
+    exact (nthsafe _ n0 l0 hlt); auto.
+Defined.
+
+Lemma nthsafe_ntherror:
+  forall {A} {l : list A} {n} h1,
+    nth_error l n = Some (nthsafe n l h1).
+  intros A l. induction l; intros; subst; try (cbn in *; eauto; try lia; fail).
+  destruct n; cbn in *; eauto.
+Qed. 
+
+Lemma nthsafe_red:
+  forall A n (a:A) l h1 h2,
+  nthsafe (S n) (a :: l) h1 = nthsafe n l h2.
+  intros.
+  assert (nth_error  (a :: l) (S n) = nth_error l n) as HEQ; try (cbn in *; try reflexivity; fail).
+  rewrite (nthsafe_ntherror h1) in HEQ.
+  rewrite (nthsafe_ntherror h2) in HEQ.
+  injection HEQ; auto.
 Qed.
 
 
@@ -788,6 +819,146 @@ Definition UnitClause (c : Clause V) a :=
             j <> i -> 
             LiteralByPAssignment (nthsafe j c h2) a = Some false
   }}.
+
+Lemma UnitClauseNeverEmpty c :
+  forall {a}, UnitClause c a ->
+  c <> nil.
+intros a h. 
+destruct c; try (intro; eauto; try discriminate).
+destruct h as [i [h _]]; cbn in *; try contradiction. lia.
+Qed. 
+  
+Lemma UnitClauseNeverEmpty' :
+  forall {a}, UnitClause nil a ->
+  False.
+intros a h. 
+destruct h as [i [h _]]; cbn in *; try contradiction. lia.
+Qed. 
+
+(* Definition AllFalseClause (c : Clause V) a :=
+  forall j (h2 : j < length c), 
+    LiteralByPAssignment (nthsafe j c h2) a = Some false *)
+
+
+Definition isSomefalse k := 
+  match k with
+  | Some false => true
+  | _ => false
+  end.
+  
+Definition isNone {A : Type} (k : option A) := 
+    match k with
+    | None => true
+    | _ => false
+  end.
+
+
+
+Theorem find_index {A:Type} (f : A -> bool) (l : list A) :
+  {i : nat | {h : i < length l |  f(nthsafe i l h) = true}} 
+  + {forall i (h : i < length l), f(nthsafe i l h) = false}.
+  induction l.
+  + right. intros. cbn in *. lia. 
+  + destruct IHl as [[i [h hindex]] | hfail].
+    left.  exists (S i). assert (S i < length (a :: l)) as hlt; try (cbn in *; try lia; fail). 
+    exists hlt. cbn in hlt. erewrite nthsafe_red. eauto.
+  Admitted.
+
+
+
+
+
+
+Axiom UnitClauseComputable0:
+  forall {c i} a (h : i < length c),
+  (
+  (LiteralByPAssignment (nthsafe i c h) a) = None
+  /\ forall j (h2 : j < length c), 
+      j <> i -> 
+      LiteralByPAssignment (nthsafe j c h2) a = Some false) ->
+  (
+  (LiteralByPAssignment (nthsafe i c h) a) = None
+  /\ length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1
+  /\ c <> nil
+  ).
+
+Axiom UnitClauseComputable1:
+  forall {c i} a (h : i < length c),
+  (
+  (LiteralByPAssignment (nthsafe i c h) a) = None
+  /\ length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1
+  /\ c <> nil
+  ) ->
+  (
+  (LiteralByPAssignment (nthsafe i c h) a) = None
+  /\ forall j (h2 : j < length c), 
+      j <> i -> 
+      LiteralByPAssignment (nthsafe j c h2) a = Some false)
+  .
+
+Lemma UnitClause_computable_chara:
+  forall {c a},
+    UnitClause c a ->
+    {i & { h : i < length c | (
+  (LiteralByPAssignment (nthsafe i c h) a) = None
+  /\ length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1
+  /\ c <> nil
+  )} }.
+  intros c a h.
+  destruct h as [index [h0 [h01 h02]]].
+  exists index. exists h0.
+  eapply UnitClauseComputable0; eauto.
+Qed.
+
+
+Theorem UnitClause_Dec:
+  forall (c : Clause V) a,
+  UnitClause c a + {UnitClause c a -> False}.
+
+destruct c eqn:heqc;[right; eapply UnitClauseNeverEmpty'; eauto | idtac].
+assert (c <> nil); [try intro; subst; try contradiction; try discriminate | idtac].
+intros a. 
+destruct (find_index (fun x => isNone (LiteralByPAssignment x a)) c) as [[i [h hf]] | hk]; unfold isSomefalse in *;
+try (right; intro HC; destruct (UnitClause_computable_chara HC) as [index [h1 [h11 [h12 h13]]]]; subst; try contradiction; fail).
++
+  repeat breakAssumpt1.
+  destruct (eq_dec 
+    (length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c))
+    ((length c) - 1)
+  ); try (right; intro HC; destruct (UnitClause_computable_chara HC) as [index [h1 [h11 [h12 h13]]]]; subst; try contradiction; fail).
+  left. exists i. subst.  exists h. unfold isNone in hf. repeat breakAssumpt1.
+      split; eauto.
+      eapply (UnitClauseComputable1 a h). split; eauto.
++ right. intro HC. destruct HC as [index [h2 [h21 h22]]].
+  subst. clean_pose (hk index h2). 
+  unfold isNone in *. repeat breakAssumpt1.
+Qed.
+(* 
+Theorem partition (f : A -> bool) (l : list A):
+  {l1 : list {i : nat & {h : i < length l | f (nthsafe ) }} & 
+    
+  } 
+*)
+
+(* We postulate the following axiom for computation, which makes things easier*)
+(* Axiom UnitClause_Counting0:
+  forall {c a},
+  UnitClause c a ->
+  length (filter (fun x => isNone (LiteralByPAssignment x a)) c) = 1 /\
+  length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1.
+
+Theorem UnitClause_Counting1:
+  forall {c a},
+  c <> nil ->
+  length (filter (fun x => isNone (LiteralByPAssignment x a)) c) = 1 /\
+  length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1 ->
+  UnitClause c a. *)
+
+
+
+(* Search ({_ < _} + {_}). *)
+
+
 
 Definition UnitClause_UnitLiteral {c a} (u : UnitClause c a) : Literal V.
   destruct u as [i [h hh]].
@@ -807,7 +978,9 @@ Qed.
 Definition UnitClause_Dec:
   forall (c : Clause V) a,
     UnitClause c a + {UnitClause c a -> False}.
-Admitted.
+intros c a. 
+destruct (eq_dec (length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c)) 1) as [heq | heq].
++ left.  
 
 (* 
   unit_prop_AS_spec:

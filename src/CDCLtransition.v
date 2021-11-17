@@ -963,6 +963,55 @@ eapply rp_rconj; [exact Hproof2 | idtac].
 pose (AssignmentStackHasRProof H0) as hproof1. cbn in *. eauto.
 Qed.
 
+(* Definition isUnitClause (c : Clause V) (a : PAssignment V) : bool.
+  destruct (UnitClause_Dec c a).
+  exact true.
+  exact false.
+Defined. *)
+
+
+Fixpoint CountUnitClauses (f : CNF V) (assign : PAssignment V) : nat :=
+  match f with
+  | nil => 0
+  | cons h t =>
+    if (UnitClause_Dec h assign) then 1 else 0 + CountUnitClauses t assign
+  end.  
+
+Definition CountUnitClausesIn {f l} (st : CDCLState f l) : nat.
+  destruct st as [atrail [hatrail hp]].
+  destruct atrail as [_ | [g d] t]; try (inversion hatrail; fail).
+  exact (CountUnitClauses (l ++ f) d).
+Defined.
+
+Ltac breakAssumpt2:=
+  match goal with
+  | [h0 : context[match ?exp with _ => _ end] |- _ ] => 
+    let heq := fresh "heq" in
+    destruct exp eqn:heq; try discriminate; try contradiction
+  end.
+
+
+Lemma CountUnitClauses0_iff_allnotunitclauseA: forall {l assign},
+  CountUnitClauses l assign = 0 -> 
+  (forall i (h : i < length l), UnitClause (nthsafe i l h) assign -> False).
+  intros l. induction l; intros; subst; cbn in *; intros; repeat breakAssumpt2; eauto; try lia.
+Qed.
+
+Lemma CountUnitClauses0_iff_allnotunitclauseB: forall {l assign},
+(forall i (h : i < length l), UnitClause (nthsafe i l h) assign -> False) ->
+  CountUnitClauses l assign = 0.
+  intros l. induction l; intros assign H0; subst; intros; repeat breakAssumpt2; auto; try lia.
+  simpl CountUnitClauses.
+  destruct (UnitClause_Dec a assign) as [u | u]; subst; auto; try contradiction; try discriminate.
+  + assert False; try contradiction.
+    assert (0 < length (a::l)) as hle; try (cbn in *; try lia; fail).
+    apply (H0 0 hle u). 
+  + apply IHl; auto. intros. 
+    assert (S i < length (a::l)) as hle2; try (cbn in *; try lia; fail).
+    apply (H0 (S i) hle2); auto. erewrite nthsafe_red; auto.
+  exact H1.
+Qed.
+
 Definition NoUnitClause {f l}
   (st : CDCLState f l) 
   (* (atrail : list (PAssignment V * PAssignment V)) 
@@ -973,8 +1022,22 @@ Definition NoUnitClause {f l}
   + inversion AT.
   + destruct h as [g d].
     exact (
-      forall i (h : i < length f), UnitClause (nthsafe i f h) d -> False).
+      forall i (h : i < length (l ++ f)), UnitClause (nthsafe i (l ++ f) h) d -> False).
   Defined.
+
+
+
+Theorem NoUnitClause_computable: forall {f l} {st : CDCLState f l}, 
+  NoUnitClause st <-> (CountUnitClausesIn st = 0).
+  split; intros; destruct st as [atrail [AT rp]];
+    destruct atrail as [_ | [g d] t]; subst; eauto; try contradiction; try discriminate;
+    try (inversion AT; fail); cbn in *.
+  + eapply CountUnitClauses0_iff_allnotunitclauseB; auto.
+  + eapply CountUnitClauses0_iff_allnotunitclauseA; auto.
+Qed.
+
+
+
 
 
 
@@ -985,12 +1048,90 @@ Definition NoUnitClause {f l}
     AS C trail2 *
     { h : trail2 <> nil |
     NoUnitClause C trail2 h}}. *)
-  
-Theorem vanilla_propagate_all_unit_clause:
-    forall {f l} (st : CDCLState f l),
-    {st2 : CDCLState f l | NoUnitClause st2 /\ ~FailedState st2}
-    + {st2 : CDCLState f l | ConflictingState st2}.
+
+
+Fixpoint lenFA {T} (f : FiniteAssignment T) := 
+  match f with
+  | empty_fa => 0
+  | assign_fa _ _ t _ => S (lenFA t)
+  end.
+(* Print isUnitClause. *)
+Definition deducedLitNum {f l} (st : CDCLState f l) : nat.
+  destruct st as [atrail [hf1 hf2]].
+  destruct atrail as [_ | [g [d1 d2]] t].
+  exact 0.
+  exact (lenFA d2).
+Defined.
+
+
+Lemma FailedSt_ConflictSt {f l} (st : CDCLState f l):
+    FailedState st ->
+    ConflictingState st.
+  intros.
+  destruct st as [atrail [hf1 hf2]].
+  destruct atrail as [_ | [g d] t]; subst; eauto; try contradiction; try discriminate;
+  try (inversion hf1; fail); cbn in *.
+  repeat breakAssumpt2. auto.
+Qed.
+
+Lemma vanilla_propagate_all_unit_clause_onestep:
+  forall {f l} (st : CDCLState f l), CountUnitClausesIn st <> 0 /\ ~FailedState st ->
+  {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\ ~FailedState st2}
+  + {st2 : CDCLState f l | ConflictingState st2}.
 Admitted.
+
+
+
+(* TODO Prove the termination of unit propagation *)
+Theorem vanilla_propagate_all_unit_clause
+    (fuel : nat): forall {f l} (st : CDCLState f l),
+    {st2 : CDCLState f l | NoUnitClause st2 /\ ~FailedState st2}
+    + {st2 : CDCLState f l | ConflictingState st2}
+    + {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\  ~ FailedState st2 }.
+  induction fuel.
+  + intros f l st.
+    (* When fuel used up *)
+    destruct (FailedState_Dec st) as [hfail | hnfail].
+    ++ left. right. exists st; apply FailedSt_ConflictSt. auto.
+    ++ destruct (CountUnitClausesIn st) eqn:hucn.
+       assert (NoUnitClause st) as HNUC; [try (eapply NoUnitClause_computable; eauto; fail) | idtac].
+       left. left. exists st. split; [apply HNUC | apply hnfail].
+       assert (CountUnitClausesIn st <> 0) as hucn0; [try lia | idtac].
+       destruct (vanilla_propagate_all_unit_clause_onestep st) as [[st2 [h1 h2]] | [st2 h1]].
+       split; auto. 
+       right. exists st2. auto.
+       left. right. exists st2. auto.
+  + (* When fuel has left*)
+    intros f l st.
+    (* Still check if failed *)
+    destruct (FailedState_Dec st) as [hfail | hnfail].
+    ++ left. right. exists st; apply FailedSt_ConflictSt. apply hfail.
+    ++ destruct (CountUnitClausesIn st) eqn:hucn.
+    +++
+       (* No Unit Clause! We are done *)
+       assert (NoUnitClause st) as HNUC; [try (eapply NoUnitClause_computable; eauto; fail) | idtac].
+       left. left. exists st. split; [apply HNUC | apply hnfail].
+    +++  
+       (* Still Unit Clause...  *)
+       assert (CountUnitClausesIn st <> 0) as hucn0; [try lia | idtac].
+    (* We progress one step and see if the result is good *)
+      destruct (vanilla_propagate_all_unit_clause_onestep st) as [[st2 [h1 h2]] | [st2 h1]].
+      split; auto.
+      ++++
+        destruct (IHfuel _ _ st2) as [[[st3 hrec] | [st3 hrec]] | [st3 hrec]].
+        +++++ left. left. exists st3. auto.
+        +++++ left. right. exists st3. auto.
+        +++++ destruct (FailedState_Dec st3) as [fail0 | nfail0]. 
+          ++++++    pose (FailedSt_ConflictSt _ fail0) as fc0.
+                left. right. exists st3. auto.
+          ++++++      right.  exists st3. split; auto; try lia.
+      ++++ left. right. exists st2. apply h1.
+    (* NOT Failure yet, check if it has any more unit clause*)
+
+Qed.
+
+
+
 
 
 (* UnitProp until cannot spec*)
@@ -1103,12 +1244,6 @@ Definition learn_CS_spec1 {f learned g}
 Qed.
 
 
-Ltac breakAssumpt2:=
-  match goal with
-  | [h0 : context[match ?exp with _ => _ end] |- _ ] => 
-    let heq := fresh "heq" in
-    destruct exp eqn:heq; try discriminate; try contradiction
-  end.
 
   
 

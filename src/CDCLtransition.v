@@ -824,17 +824,20 @@ Theorem find_index {A:Type} (f : A -> bool) (l : list A) :
   induction l.
   + right. intros. cbn in *. lia. 
   + destruct IHl as [[i [h hindex]] | hfail].
-    left.  exists (S i). assert (S i < length (a :: l)) as hlt; try (cbn in *; try lia; fail). 
+    ++ left.  exists (S i). assert (S i < length (a :: l)) as hlt; try (cbn in *; try lia; fail). 
     exists hlt. cbn in hlt. erewrite nthsafe_red. eauto.
-  Admitted.
+    ++ destruct (f a) eqn:hfa.
+        +++ left. exists 0. cbn in *. eexists; eauto. lia.
+        +++ right. intros i h2. destruct i; try (cbn in *; eauto; fail).
+Qed.    
 
 
 
 
 
-(* We postulate the following axio m for computation, which makes things easier*)
-
-
+(* We postulate the following axio m for computation, which makes things easier
+   TODO: prove it
+*)
 Axiom UnitClauseComputable0:
   forall {c i} a (h : i < length c),
   (
@@ -1191,6 +1194,22 @@ backjump_AS_spec: forall  {f C k g d s l} x b,
 
 *)
 
+Definition FinalState_Dec2
+  {f l} (st : CDCLState f l) (h : f <> nil):
+    {g | CNFByPAssignment f g =  Some true} 
+    + RProof (CNFFormula f) fbot
+    + {~ FinalState st}.
+intros. unfold FinalState.
+destruct (SucceedState_Dec st).
++ left. left. apply (SucceedSt_extract st); auto. 
++ destruct (FailedState_Dec st).
+  ++ left. right. apply (FailedSt_extract st); auto.
+  ++ right. intro H0. destruct H0; try contradiction.
+Qed.
+
+Theorem guess_new_literal_then_maybe_conflict {f l} (st: CDCLState f l):
+  {l2 & {st2 : CDCLState f l2 | deducedLitNum st2 > deducedLitNum st \/ length l2 > length l}}.
+Admitted.
 
 Definition vanilla_conflicting_analysis:
   forall {f l} (h : f <> nil) {st : CDCLState f l} 
@@ -1244,31 +1263,34 @@ Definition learn_CS_spec1 {f learned g}
 Qed.
 
 
-
+(* Use to fuel *)
+Definition CountLiteral (c : CNF V) :=
+  fold_right Nat.add 0 (map (fun (l: Clause V) => length l) c).
   
 
 (* One loop of Vanilla CDCL 
     Which is basically DPLL anyway
 *)
-Definition VanillaCDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil):
-{l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
-+ {g | CNFByPAssignment f g =  Some true} 
-+ RProof (CNFFormula f) fbot.
+Definition VanillaCDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (suggest_fuel : nat):
+{g | CNFByPAssignment f g =  Some true} 
++ RProof (CNFFormula f) fbot
++ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2}}. (* Progress on Learned! *)
 
-destruct (FinalState_Dec st) as [[H1 | H2] | H3].
-+ left. right. eapply SucceedSt_extract; auto. exact H1.
-+ right. eapply  FailedSt_extract; auto. exact H2.
+destruct (FinalState_Dec2 st h) as [Hfinal | H3].
++ left. auto.
 + 
  (* Main function starts here  *)
  (* First Do All the Unit Propagation *)
-    destruct (vanilla_propagate_all_unit_clause st) as [[st2 [hnuc hnfail]] | [st2 hcflict]].
-    ++  (* If no conflict *)
+    destruct (vanilla_propagate_all_unit_clause suggest_fuel st) as [[[st2 [hnuc hnfail]] | [st2 hcflict]] | [st2 [hprog hnfail]]].
+    ++  (* If no conflict, and successfully propagate all *)
       (* check fully assigned or not *)
       destruct (SucceedState_Dec st2).
         (* if it is fully assigned, then success extract*)
-        +++ left. right. eapply (SucceedSt_extract st2); auto. 
-        (* If it is not return this  *)
-        +++ left. left. exists l. exists st2. unfold FinalState. intro FS; destruct FS; try contradiction.
+        +++ left. left. eapply (SucceedSt_extract st2); auto. 
+        (* If it is guess a literal and progress, we know no conflict will happen  *)
+        +++ destruct ()
+          
+        left. left. exists l. exists st2. unfold FinalState. intro FS; destruct FS; try contradiction.
     
     (* If conflict happens *)
     ++ destruct (FailedState_Dec st2).
@@ -1289,6 +1311,8 @@ destruct (FinalState_Dec st) as [[H1 | H2] | H3].
             inversion hst2info; intros; subst; eauto.
             try rewrite hcflict in hF. destruct hF; try discriminate; try contradiction.
             (* Do trivial back track *)
+    (* not completely propagated *)
+    ++ 
             Admitted.
 
 
@@ -1300,7 +1324,8 @@ destruct (FinalState_Dec st) as [[H1 | H2] | H3].
 
 (* The main Procedure to be extract *)
 Definition VanillaCDCLAlg {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (fuel : nat) :
-  {l2 & {st2 : CDCLState f l2 | ~ FinalState st2}} 
+  {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2}} 
+  (* Fail to achieve the final result, just returning the intermediate state, but will have progress info *)
   + {g | CNFByPAssignment f g = Some true} 
   + RProof (CNFFormula f) fbot.
 Admitted.

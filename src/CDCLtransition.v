@@ -1208,7 +1208,7 @@ destruct (SucceedState_Dec st).
 Qed.
 
 Theorem guess_new_literal_then_maybe_conflict {f l} (st: CDCLState f l):
-  {l2 & {st2 : CDCLState f l2 | deducedLitNum st2 > deducedLitNum st \/ length l2 > length l}}.
+  {l2 & {st2 : CDCLState f l2 | (deducedLitNum st2 > deducedLitNum st \/ length l2 > length l) /\ length l2 >= length l}}.
 Admitted.
 
 Definition vanilla_conflicting_analysis:
@@ -1274,7 +1274,7 @@ Definition CountLiteral (c : CNF V) :=
 Definition VanillaCDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (suggest_fuel : nat):
 {g | CNFByPAssignment f g =  Some true} 
 + RProof (CNFFormula f) fbot
-+ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2}}. (* Progress on Learned! *)
++ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2 /\ ~ ConflictingState st2  /\ (length l2 >= length l)}}. (* Progress on Learned! *)
 
 Ltac check_final_state_and_return st h:=
   let hfinal := fresh "hfinal"
@@ -1291,10 +1291,10 @@ Ltac check_final_state_and_return st h:=
         (* if it is fully assigned, then success extract*)
         ++ left. left. eapply (SucceedSt_extract st2); auto. 
         (* If it is guess a literal and progress, we know no conflict will happen  *)
-        ++ destruct (guess_new_literal_then_maybe_conflict st2) as [l3 [st3 hprog3]].
+        ++ destruct (guess_new_literal_then_maybe_conflict st2) as [l3 [st3 [hprog31 hprog32]]].
         check_final_state_and_return st3 h.
-        right. exists l3. exists st3. repeat split; try auto. 
-          destruct hprog3 as [hprog31 | hprog32]; [try lia | auto].
+        right. exists l3. exists st3. repeat split; try auto.
+          destruct hprog31; [try lia | auto].
     (* If conflict happens *)
     + destruct (FailedState_Dec st2).
       (* check if failure state *)
@@ -1307,9 +1307,10 @@ Ltac check_final_state_and_return st h:=
             destruct (learn_CS_spec1 hl2 st2) as [hst2 hst2info].
             right. 
             exists (l2 ++ l). exists hst2.
-            split. 
+            repeat split. 
             +++ left. rewrite app_length. destruct (eq_dec (length l2) 0) as [ll20 | ll2n0]. 
-            assert (l2 = nil) as Hl2nil; [try eapply  length_zero_iff_nil; eauto | idtac]. try contradiction. lia.  
+            assert (l2 = nil) as Hl2nil; [try eapply  length_zero_iff_nil; eauto | idtac]. try contradiction. lia. 
+         
             +++
             
             unfold FinalState in *; unfold ConflictingState in *; cbn in *.
@@ -1319,11 +1320,11 @@ Ltac check_final_state_and_return st h:=
             repeat breakAssumpt2.
             inversion hst2info; intros; subst; eauto.
             try rewrite hcflict in hF. destruct hF; try discriminate; try contradiction.
+
             (* Do trivial back track *)
     (* not completely propagated *)
     + check_final_state_and_return st2 h. right. exists l. exists st2. split; auto.
 Qed.
-            Admitted.
 
 
 
@@ -1333,12 +1334,25 @@ Qed.
 
 
 (* The main Procedure to be extract *)
-Definition VanillaCDCLAlg {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (fuel : nat) :
-  {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2}} 
-  (* Fail to achieve the final result, just returning the intermediate state, but will have progress info *)
-  + {g | CNFByPAssignment f g = Some true} 
-  + RProof (CNFFormula f) fbot.
-Admitted.
+Fixpoint VanillaCDCLAlg  (fuel : nat) {f l: CNF V} (st : CDCLState f l) (h : f <> nil) {struct fuel}:  
+{g | CNFByPAssignment f g =  Some true} 
++ RProof (CNFFormula f) fbot
++ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2}}. (* Progress on Learned! *)
+
+pose (CountLiteral (f ++ l)) as total_literal.
+destruct fuel eqn:heqnfuel; intros.
++ apply (VanillaCDCLOneStep st h total_literal).
++ (* Some more Fuel*) 
+destruct (VanillaCDCLOneStep st h total_literal) as [hfinal | [l2 [st2 [hnfinal11 hnfinal12]]]].
+++ left. apply hfinal.
+++ destruct (VanillaCDCLAlg n _ _ st2 h) as [hfinal3 | [l3 [st3 [hnfinal31 hnfinal32]]]].
+  +++ left. apply hfinal3.
+  +++ right. exists l3. exists st3. split; auto. 
+  destruct hnfinal31 as [hnfinal311 | hnfinal312];
+  destruct hnfinal11 as [hnfinal111 | hnfinal112];
+  try lia.
+
+
 
 
 (* Now we need to really model

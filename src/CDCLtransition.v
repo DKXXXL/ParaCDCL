@@ -1117,9 +1117,10 @@ Lemma CNFByAssignmentImplication:
   CNFByPAssignment (f ++ l) d = Some false.
   intros f. induction f; intros;
   cbn in *; try discriminate.
-  repeat breakAssumpt1.
-  destruct b0; destruct b; subst; eauto; cbn in *; eauto; try discriminate;
-  try (erewrite IHf; eauto; fail).
+  repeat breakAssumpt1; try_injection; subst; eauto; cbn in *;
+try (erewrite IHf; eauto; cbn in *; auto; fail);
+try (repeat breakAssumpt3; auto).
+Qed.
   
 
 Lemma FailedSt_ConflictSt {f l} (st : CDCLState f l):
@@ -1129,7 +1130,8 @@ Lemma FailedSt_ConflictSt {f l} (st : CDCLState f l):
   destruct st as [atrail [hf1 hf2]].
   destruct atrail as [_ | [g d] t]; subst; eauto; try contradiction; try discriminate;
   try (inversion hf1; fail); cbn in *.
-  repeat breakAssumpt2. 
+  repeat breakAssumpt2.
+   eapply CNFByAssignmentImplication; auto.
 Qed.
 
 Lemma vanilla_propagate_all_unit_clause_onestep:

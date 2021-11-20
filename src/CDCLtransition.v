@@ -1046,12 +1046,6 @@ Definition deducedLitNum {f l} (st : CDCLState f l) : nat.
   exact (lenFA d2).
 Defined.
 
-Lemma UnitClause_AS_spec_in_st:
-  forall  {f l}  (st : CDCLState f l),
-    HasUnitClause_in_st st ->
-    {st2 : CDCLState f l & deducedLitNum st2 > deducedLitNum st}.
-Admitted.
-
 
 Lemma ToLiteralInjective:
   forall y,
@@ -1061,6 +1055,48 @@ Lemma ToLiteralInjective:
     exists true | exists false
   ]; cbn in *; auto.
 Qed.
+
+Lemma nthsafe_nthdefault:
+  forall {A} {l : list A} {i h k},
+    nthsafe i l h = nth i l k.
+  intros A l. induction l; intros; try (cbn in *; try lia; fail).
+  destruct i.
+  cbn in *; auto.
+  erewrite nthsafe_red. simpl. eauto.
+  Unshelve. cbn in *. lia.
+Qed.
+  
+
+Lemma UnitClause_AS_spec_in_st:
+  forall  {f l}  (st : CDCLState f l),
+    HasUnitClause_in_st st ->
+    {st2 : CDCLState f l & deducedLitNum st2 > deducedLitNum st}.
+  intros f l [a [astack p]] h.
+  destruct a as [hnil | [g d] t];
+  try (destruct (AS_no_nil astack); fail); cbn in h.
+  destruct h as [i0 [hle [i1 [hle2 [huc0 huc1]]]]].
+  remember (nthsafe i1 (nthsafe i0 (l ++ f) hle) hle2) as targetL.
+  remember (nthsafe i0 (l ++ f) hle) as targetC.
+  destruct (ToLiteralInjective targetL) as [v [b htv]].
+  assert (PA d v = None) as hdnvb. 
+  + unfold LiteralByPAssignment in huc0.
+    unfold ToLiteral in htv.
+    repeat breakAssumpt1;
+    destruct b; cbn in *; try (injection htv; intros; subst; eauto; try discriminate; fail);
+    try discriminate.
+  + assert (AS (l ++ f) ((g, d[v:=b]hdnvb) :: t)) as nextAS.
+
+    ++  subst. apply deduce_as;auto. try rewrite <- htv.   
+        (* rewrite HeqtargetL in *. *)
+        eapply rp_trans; [idtac | apply rp_unitprop; auto].
+        eapply rp_rconj;[idtac | eapply AssignmentStackHasRProof; eauto].
+        eapply rp_trans; [eapply rp_weaken; eauto | idtac].
+        erewrite nthsafe_nthdefault; eauto.
+    ++  eexists (existT _ ((g, d [v := b] hdnvb) :: t) (nextAS, p)).
+        destruct d. cbn in *. lia.
+Qed.
+    
+
 Theorem UnitClauseAsLiteral:
   forall  {c d} (u : UnitClause c d),
     {x & {b & UnitClause_UnitLiteral u = ToLiteral x b}}.
@@ -1145,6 +1181,7 @@ Qed.
 
 Print sumor.
 
+
 Theorem HasUnitClause_Dec:
   forall {f l} (st : CDCLState f l),
     HasUnitClause_in_st st + {NoUnitClause st}.
@@ -1160,7 +1197,14 @@ Theorem HasUnitClause_Dec:
   ) as ff.
   destruct (find_index ff (l++f)) as 
   [[index [hle h2]] | hnonfound]; cbn in *.
-Admitted .
+  + unfold ff in *. destruct (UnitClause_Dec (nthsafe index (l ++ f) hle) d); try discriminate; try contradiction.
+    left. exists index. exists hle. auto.
+  + right. intros index hle2 H0.
+  unfold ff in hnonfound. 
+  clean_pose (hnonfound index hle2).
+  destruct (UnitClause_Dec (nthsafe index (l ++ f) hle2) d); try discriminate; try contradiction.
+Qed.
+
 
 
 
@@ -1224,9 +1268,15 @@ Lemma vanilla_propagate_all_unit_clause_onestep:
 Ltac check_conflicting_state_and_return st:=
   let hfinal := fresh "hfinal"
   in let    H := fresh "H"
-  in destruct (ConflictingState_Dec st) as [Hfinal | H]; [right; auto | idtac].
+  in destruct (ConflictingState_Dec st) as [Hfinal | H]; [right; exists st; auto | idtac].
+  
   intros f l st [h0 h1].
-  destruct 
+  destruct (HasUnitClause_Dec st) as [h2 | h2].
+  + destruct (UnitClause_AS_spec_in_st _ h2) as [st2 h3].
+    check_conflicting_state_and_return st2.
+    left. exists st2. eauto.
+  + rewrite (NoUnitClause_computable) in h2. try contradiction.
+Qed.
 
 
 

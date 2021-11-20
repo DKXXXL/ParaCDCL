@@ -1026,8 +1026,8 @@ Definition HasUnitClause_in_st {f l} (st : CDCLState f l): Set.
 ). *)
   destruct st as [[ | [g d] s ] [astack]].
   destruct (AS_no_nil astack).
-  exact {i & {h : i < length (f ++ l) & 
-  UnitClause (nthsafe i (f ++ l) h) d
+  exact {i & {h : i < length (l ++ f) & 
+  UnitClause (nthsafe i (l ++ f) h) d
 }}.
 Defined.
 
@@ -1143,11 +1143,24 @@ Theorem NoUnitClause_computable: forall {f l} {st : CDCLState f l},
   + eapply CountUnitClauses0_iff_allnotunitclauseA; auto.
 Qed.
 
+Print sumor.
+
 Theorem HasUnitClause_Dec:
   forall {f l} (st : CDCLState f l),
     HasUnitClause_in_st st + {NoUnitClause st}.
-  destruct 
-  
+  intros f l [a [astack p]]. 
+  destruct a as [| [g d] s];
+    try (destruct (AS_no_nil astack); fail).
+    cbn in *.
+  pose (fun x =>
+    match UnitClause_Dec x d with
+    | inleft _ => true
+    | inright _ => false 
+    end
+  ) as ff.
+  destruct (find_index ff (l++f)) as 
+  [[index [hle h2]] | hnonfound]; cbn in *.
+Admitted .
 
 
 
@@ -1213,6 +1226,7 @@ Ltac check_conflicting_state_and_return st:=
   in let    H := fresh "H"
   in destruct (ConflictingState_Dec st) as [Hfinal | H]; [right; auto | idtac].
   intros f l st [h0 h1].
+  destruct 
 
 
 

@@ -120,6 +120,8 @@ Fixpoint ClauseByPAssignment {V : Set} `{EqDec_eq V} (c : Clause V) (a : PAssign
   | (cons h t) =>
     match LiteralByPAssignment h a, ClauseByPAssignment t a with
     | Some b1, Some b2 => Some (orb b1 b2)
+    | Some true, _ => Some true
+    | _, Some true => Some true
     | _, _ => None
     end
   end.
@@ -135,6 +137,8 @@ Fixpoint CNFByPAssignment {V : Set} `{EqDec_eq V} (c : CNF V) (a : PAssignment V
   | (cons h t) => 
     match (ClauseByPAssignment h a), (CNFByPAssignment t a) with 
     | Some b1, Some b2 => Some (andb b1 b2)
+    | Some false, _ => Some false
+    | _ , Some false => Some false
     | _, _ => None
     end
   end.
@@ -156,11 +160,15 @@ Fixpoint FormulaByPAssignment {V: Set} `{EqDec_eq V} (c : Formula V) (s : PAssig
   | fconj a b => 
       match (rec a), (rec b) with 
       | Some a, Some b => Some (andb a b)
+      | Some false, _ => Some false
+      | _, Some false => Some false
       | _, _ => None
       end
   | fdisj a b => 
       match (rec a), (rec b) with 
       | Some a, Some b => Some (orb a b)
+      | Some true, _ => Some true
+      | _, Some true => Some true
       | _, _ => None
       end
   | fneg  a => 
@@ -377,6 +385,37 @@ Definition LessRefine {V : Set} `{EqDec_eq V} (b a : PAssignment V) :=
 Definition LessRefine' {V : Set} `{EqDec_eq V} (b : PAssignment V) (a: Assignment V) :=
   forall x t, PA b x = Some t -> PA b x = Some (a x).
 
+  Ltac breakAssumpt1:=
+    match goal with
+    | [h0 : match ?exp with _ => _ end = _ |- _ ] => 
+      let heq := fresh "heq" in
+      destruct exp eqn:heq; try discriminate; try contradiction
+    end.
+  Ltac breakAssumpt3:=
+    match goal with
+    | [h0 : context[match ?exp with _ => _ end] |- _ ] => 
+      let heq := fresh "heq" in
+      destruct exp eqn:heq; try discriminate; try contradiction
+    | [ |- context[match ?exp with _ => _ end]] => 
+      let heq := fresh "heq" in
+      destruct exp eqn:heq; try discriminate; try contradiction
+  
+      end.
+      Ltac try_injection :=
+        match goal with
+        | [h : Some _ = Some _ |- _] =>
+          injection h; intros; subst; eauto;  generalize h; clear h;
+          try_injection;
+          intro h
+        | _ => idtac
+        end.
+
+
+  Ltac stronger_subst:=
+    match goal with
+    | [h0 : ?a = _, h1 : ?a = _ |- _] =>
+      rewrite h0 in *; clear h0
+      end.
 
 Lemma refinement_invariance: forall {V : Set} `{EqDec_eq V} {c} {b a}
   (hlr : LessRefine b a)  {t},
@@ -387,29 +426,28 @@ Lemma refinement_invariance: forall {V : Set} `{EqDec_eq V} {c} {b a}
   + destruct l; cbn in *; try erewrite hlr; subst; eauto;
   intro hwrongeq; try rewrite hwrongeq in *; try discriminate.
   + 
-    Ltac breakAssumpt1:=
-      match goal with
-      | [h0 : match ?exp with _ => _ end = _ |- _ ] => 
-        let heq := fresh "heq" in
-        destruct exp eqn:heq; try discriminate; try contradiction
-      end.
-    repeat breakAssumpt1.
-    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto).
-  + repeat breakAssumpt1.
-    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto).
-  + repeat breakAssumpt1.
+    repeat breakAssumpt1; repeat stronger_subst; subst; eauto; try_injection; subst; eauto;
+    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto; fail).
+    erewrite IHc1;  eauto; cbn in *.  repeat breakAssumpt3; eauto.
+    erewrite IHc2;  eauto; cbn in *.  repeat breakAssumpt3; eauto.    +     
+    repeat breakAssumpt1; repeat stronger_subst; subst; eauto; try_injection; subst; eauto;
+    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto; fail).
+    erewrite IHc1;  eauto; cbn in *. repeat breakAssumpt3; eauto. 
+    erewrite IHc2;  eauto; cbn in *. repeat breakAssumpt3; eauto.  
++ repeat breakAssumpt1.
     repeat (erewrite IHc; eauto; fail).
 Qed.
 
+Search (orb _ true).
 
-Ltac try_injection :=
+Ltac simpl_bool:=
+  cbn in *; repeat 
   match goal with
-  | [h : Some _ = Some _ |- _] =>
-    injection h; intros; subst; eauto;  generalize h; clear h;
-    try_injection;
-    intro h
-  | _ => idtac
-  end.
+  | [|- context[andb _ false]] =>
+    rewrite Bool.andb_false_r in *
+  | [|- context[orb _ true]] =>
+    rewrite Bool.orb_true_r in *
+  end; cbn in *.
 
 Lemma refinement'_invariance: forall {V : Set} `{EqDec_eq V} {c} {b a}
   (hlr : LessRefine' b a)  {t},
@@ -421,11 +459,19 @@ Lemma refinement'_invariance: forall {V : Set} `{EqDec_eq V} {c} {b a}
   try_injection; subst; eauto.
   repeat breakAssumpt1; try_injection; subst. erewrite hlr in *; subst; eauto.
   try_injection; subst; eauto.
-  + repeat breakAssumpt1; try_injection; subst; eauto.  
-    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto).
-  + repeat breakAssumpt1.
-    repeat (erewrite IHc1; eauto; fail || erewrite IHc2; eauto); try_injection; subst; eauto.
-  + repeat breakAssumpt1.
+  + repeat breakAssumpt1; try_injection; subst; eauto;  
+    try (repeat (erewrite IHc1; eauto);
+    repeat stronger_subst; subst; cbn in *; eauto; fail);
+    try (repeat (erewrite IHc2; eauto);
+    repeat stronger_subst; subst; cbn in *; eauto).  
+    simpl_bool; cbn in *; eauto.
+  + repeat breakAssumpt1; try_injection; subst; eauto;  
+    try (repeat (erewrite IHc1; eauto);
+    repeat stronger_subst; subst; cbn in *; eauto; fail);
+    try (repeat (erewrite IHc2; eauto);
+    repeat stronger_subst; subst; cbn in *; eauto).  
+    simpl_bool; cbn in *; eauto. 
+   + repeat breakAssumpt1.
     repeat (erewrite IHc; eauto); try_injection; subst; eauto.
 
 Qed.
@@ -475,7 +521,7 @@ Lemma EvaluationSuccess_LessRefine:
     try contradiction.
   + repeat breakAssumpt1.
     destruct b0; destruct b1; subst; try discriminate; try contradiction. 
-    pose (IHhf _ heq0).
+    pose (IHhf _ heq1).
     try eapply LessRefine_inductive; eauto.
   Qed.
 
@@ -546,9 +592,14 @@ Qed.
 Lemma FormulaByPA_ClauseByPA: forall  {V : Set} `{EqDec_eq V} {c : Clause V} {d},
 FormulaByPAssignment (ClauseFormula c) d =
   ClauseByPAssignment c d.
-  intros V h c.
-induction c; intros; cbn in *; eauto.
-rewrite IHc in *. eauto.
+
+
+
+intros V h c.
+induction c; intros; cbn in *; eauto;subst; repeat breakAssumpt3; subst; repeat stronger_subst; eauto;
+try(rewrite IHc in *; repeat stronger_subst; eauto; try discriminate; fail).
+
+
 Qed.
 
 Lemma PAAsImplies_Clause_true: forall {V : Set} `{EqDec_eq V} {c : Clause V} {d},

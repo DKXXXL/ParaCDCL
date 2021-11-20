@@ -362,6 +362,30 @@ Ltac try_injection :=
     end.
   
 
+Theorem PA_consistent_with_A'':
+forall {f pa g q},
+  LiteralByPAssignment f pa = Some q ->
+  (forall x t, 
+      PA pa x = Some t ->
+      PA pa x = Some (g x)
+    ) ->
+    LiteralByPAssignment f pa = Some (LiteralByAssignment f g).
+  unfold LiteralByAssignment. unfold LiteralByPAssignment.
+  intros f pa g q H0 h. repeat breakAssumpt3; cbn in *; try_injection; subst; eauto.
+  erewrite h in heq0; eauto; try_injection .
+Qed.
+
+Theorem PA_consistent_with_A''':
+forall {f pa g q},
+  LiteralByPAssignment f pa = Some q ->
+  (forall x t, 
+      PA pa x = Some t ->
+      PA pa x = Some (g x)
+    ) ->
+    LiteralByAssignment f g = q.
+intros f pa g q H0 H1. erewrite PA_consistent_with_A'' in H0; eauto; try_injection; auto.
+Qed.
+
 Theorem PA_consistent_with_A':
   forall {f pa g q},
     ClauseByPAssignment f pa = Some q ->
@@ -369,20 +393,35 @@ Theorem PA_consistent_with_A':
         PA pa x = Some t ->
         PA pa x = Some (g x)
       ) ->
-      ClauseByPAssignment f pa = Some (ClauseByAssignment f g).
+      (ClauseByAssignment f g) = q.
   intros f.
   induction f; intros pa g q h0 h1;  subst; cbn in *; subst; eauto; 
-  repeat breakAssumpt1; try_injection; subst; eauto.
-  pose (IHf _ _ _ heq0 h1) as E.
-  try rewrite heq in *; try rewrite heq0 in *; eauto; try_injection; eauto.
-  assert (LiteralByAssignment a g = b) as HeqAssert1;
-  subst; try (rewrite HeqAssert1 in *; rewrite HeqAssert2 in *; auto; eauto; fail); try auto.
-  unfold LiteralByPAssignment in *;
-  unfold LiteralByAssignment in *;
-  repeat breakAssumpt1; cbn in *; try_injection; auto. 
-  + pose (h1 _ _ heq) as h11; try rewrite heq in *; eauto; try_injection; subst; eauto.
-  + pose (h1 _ _ heq2) as h11; try rewrite heq2 in *; eauto; try_injection; subst; eauto.
-Qed. 
+  repeat breakAssumpt1; try_injection; subst; eauto; cbn in *.
+
+  
+  repeat erewrite PA_consistent_with_A'''; eauto;
+  repeat try_injection; cbn in *; auto.
+
+  repeat erewrite PA_consistent_with_A'''; eauto;
+  repeat try_injection; cbn in *; auto.
+
+  Ltac try_injection2 :=
+    match goal with
+    | [h : Some _ = Some _ |- _] =>
+      injection h; intros; subst; eauto;  
+      clear h;
+      try_injection
+    | _ => idtac
+    end.
+
+  try_injection2;subst; eauto;
+  repeat erewrite IHf; eauto;
+  repeat erewrite PA_consistent_with_A'''; eauto;
+  repeat try_injection; cbn in *; auto.
+
+  try_injection2. erewrite IHf; eauto. simpl_bool. auto.
+Qed.
+
 
 Theorem PA_consistent_with_A0:
   forall {f pa g q},
@@ -391,12 +430,17 @@ Theorem PA_consistent_with_A0:
         PA pa x = Some t ->
         PA pa x = Some (g x)
       ) ->
-      CNFByPAssignment f pa = Some (CNFByAssignment f g).
+      (CNFByAssignment f g) = q.
   intros f. 
-  induction f; intros pa g q h0 h1; cbn in *; subst; eauto.
-  repeat breakAssumpt1; try_injection; subst; eauto.
-  erewrite PA_consistent_with_A' in heq; eauto; try_injection; subst; eauto.
-  pose (IHf _ _ _ heq0 h1) as heqhf; rewrite heq0 in heqhf; try_injection;subst; eauto.
+  induction f; intros pa g q h0 h1; cbn in *; subst; eauto; try_injection2; auto .
+  repeat breakAssumpt1; try_injection2; subst; eauto;
+  try (
+    repeat erewrite PA_consistent_with_A'; eauto; cbn in *; auto;
+    repeat erewrite IHf; eauto; cbn in *; simpl_bool; eauto; fail
+  ).
+  cbn in *.
+
+  erewrite IHf; eauto; simpl_bool; auto.
 Qed.
 
 Theorem PA_consistent_with_A:
@@ -418,7 +462,7 @@ Theorem PA_consistent_with_A:
   destruct (CNFByPAssignment f pa) eqn:H3;
   try (try rewrite H3 in H0; try discriminate; try contradiction; fail).
   pose (PA_consistent_with_A0 H3 H2) as res; eauto.
-  rewrite H3 in *; try_injection; eauto.
+  rewrite res in *; try_injection; eauto.
 Qed.
   
 
@@ -596,7 +640,7 @@ Definition ConflictingState  {f l} (st : CDCLState f l) : Prop :=
       match st with
       | existT _ s _ =>
         match s with
-        | (_, d) :: _ => CNFByPAssignment f d = Some false
+        | (_, d) :: _ => CNFByPAssignment (f ++ l) d = Some false
         | _ => False
         end
       end.
@@ -655,7 +699,7 @@ Definition ConflictingState_Dec:
 destruct st as [st1 st2]. cbn in *.
 destruct st1 as [_ | [g d] t];try_both_side.
   
-destruct (CNFByPAssignment f d); try_both_side.
+destruct (CNFByPAssignment (f ++ l) d); try_both_side.
 destruct b; try_both_side.
 Qed.
 
@@ -682,8 +726,9 @@ Theorem find_false_clause':
     {CNFByPAssignment t a = Some false}.
   intros f. induction f; intros assign h t h0 h1; try contradiction; try discriminate.
   cbn in *.
-  repeat breakAssumpt1. injection h0; intros; subst; eauto.
-  destruct b; destruct b0; subst; eauto; cbn in *; try contradiction; try discriminate; eauto.
+  repeat breakAssumpt1; injection h0; intros; subst; eauto.
+  try (destruct b0;  subst; eauto; cbn in *; try contradiction; try discriminate; eauto; fail).
+  
 Qed.
 
 
@@ -1066,6 +1111,16 @@ Definition deducedLitNum {f l} (st : CDCLState f l) : nat.
   exact (lenFA d2).
 Defined.
 
+Lemma CNFByAssignmentImplication:
+  forall {f l d},
+  CNFByPAssignment f d = Some false ->
+  CNFByPAssignment (f ++ l) d = Some false.
+  intros f. induction f; intros;
+  cbn in *; try discriminate.
+  repeat breakAssumpt1.
+  destruct b0; destruct b; subst; eauto; cbn in *; eauto; try discriminate;
+  try (erewrite IHf; eauto; fail).
+  
 
 Lemma FailedSt_ConflictSt {f l} (st : CDCLState f l):
     FailedState st ->
@@ -1074,7 +1129,7 @@ Lemma FailedSt_ConflictSt {f l} (st : CDCLState f l):
   destruct st as [atrail [hf1 hf2]].
   destruct atrail as [_ | [g d] t]; subst; eauto; try contradiction; try discriminate;
   try (inversion hf1; fail); cbn in *.
-  repeat breakAssumpt2. auto.
+  repeat breakAssumpt2. 
 Qed.
 
 Lemma vanilla_propagate_all_unit_clause_onestep:
@@ -1134,6 +1189,11 @@ Theorem vanilla_propagate_all_unit_clause
 Qed.
 
 
+
+Definition vanilla_backtracking:
+  forall {f l} (st : CDCLState f l), 
+  ConflictingState st ->
+  {st2 : CDCLState f l | ~ ConflictingState st2}.
 
 
 

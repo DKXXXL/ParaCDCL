@@ -1011,6 +1011,65 @@ eapply rp_rconj; [exact Hproof2 | idtac].
 pose (AssignmentStackHasRProof H0) as hproof1. cbn in *. eauto.
 Qed.
 
+Lemma AS_no_nil:
+  forall {f}, AS f nil -> False.
+  intros. inversion H0.
+Qed.
+
+Definition HasUnitClause_in_st {f l} (st : CDCLState f l): Set.
+(* refine (
+  match st with 
+  | existT _ ((_, d) :: _ ) _ =>
+    
+  | _ => _
+  end
+). *)
+  destruct st as [[ | [g d] s ] [astack]].
+  destruct (AS_no_nil astack).
+  exact {i & {h : i < length (f ++ l) & 
+  UnitClause (nthsafe i (f ++ l) h) d
+}}.
+Defined.
+
+
+
+Fixpoint lenFA {T} (f : FiniteAssignment T) := 
+  match f with
+  | empty_fa => 0
+  | assign_fa _ _ t _ => S (lenFA t)
+  end.
+(* Print isUnitClause. *)
+Definition deducedLitNum {f l} (st : CDCLState f l) : nat.
+  destruct st as [atrail [hf1 hf2]].
+  destruct atrail as [_ | [g [d1 d2]] t].
+  exact 0.
+  exact (lenFA d2).
+Defined.
+
+Lemma UnitClause_AS_spec_in_st:
+  forall  {f l}  (st : CDCLState f l),
+    HasUnitClause_in_st st ->
+    {st2 : CDCLState f l & deducedLitNum st2 > deducedLitNum st}.
+Admitted.
+
+
+Lemma ToLiteralInjective:
+  forall y,
+    {x & {b & y = ToLiteral x b}}.
+  intro y. unfold ToLiteral. 
+  destruct y as [v | v]; exists v; [
+    exists true | exists false
+  ]; cbn in *; auto.
+Qed.
+Theorem UnitClauseAsLiteral:
+  forall  {c d} (u : UnitClause c d),
+    {x & {b & UnitClause_UnitLiteral u = ToLiteral x b}}.
+  intros c d [index [hle [hindex hu4]]].
+  cbn in *. apply ToLiteralInjective.
+Qed. 
+
+
+
 (* Definition isUnitClause (c : Clause V) (a : PAssignment V) : bool.
   destruct (UnitClause_Dec c a).
   exact true.
@@ -1084,6 +1143,18 @@ Theorem NoUnitClause_computable: forall {f l} {st : CDCLState f l},
   + eapply CountUnitClauses0_iff_allnotunitclauseA; auto.
 Qed.
 
+Theorem HasUnitClause_Dec:
+  forall {f l} (st : CDCLState f l),
+    HasUnitClause_in_st st + {NoUnitClause st}.
+  destruct 
+  
+
+
+
+(* Theorem FindUnitClauseOrNone: forall {f l} {st : CDCLState f l}, 
+  {i & {h : i < length (l ++ f) | }} + {NoUnitClause st}. *)
+
+
 
 
 
@@ -1098,18 +1169,6 @@ Qed.
     NoUnitClause C trail2 h}}. *)
 
 
-Fixpoint lenFA {T} (f : FiniteAssignment T) := 
-  match f with
-  | empty_fa => 0
-  | assign_fa _ _ t _ => S (lenFA t)
-  end.
-(* Print isUnitClause. *)
-Definition deducedLitNum {f l} (st : CDCLState f l) : nat.
-  destruct st as [atrail [hf1 hf2]].
-  destruct atrail as [_ | [g [d1 d2]] t].
-  exact 0.
-  exact (lenFA d2).
-Defined.
 
 Lemma CNFByAssignmentImplication:
   forall {f l d},
@@ -1144,10 +1203,16 @@ Qed.
 
 
 Lemma vanilla_propagate_all_unit_clause_onestep:
-  forall {f l} (st : CDCLState f l), CountUnitClausesIn st <> 0 /\ ~ConflictingState st ->
+  forall {f l} (st : CDCLState f l), 
+  CountUnitClausesIn st <> 0 /\ ~ConflictingState st ->
   {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\ ~ConflictingState st2}
   + {st2 : CDCLState f l | ConflictingState st2}.
-Admitted.
+
+Ltac check_conflicting_state_and_return st:=
+  let hfinal := fresh "hfinal"
+  in let    H := fresh "H"
+  in destruct (ConflictingState_Dec st) as [Hfinal | H]; [right; auto | idtac].
+  intros f l st [h0 h1].
 
 
 

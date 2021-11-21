@@ -1336,17 +1336,26 @@ Axiom rp_false_by_eval:
 
 
 
-Definition vanilla_backtracking_helper:
-  forall {f t} (stack : AS f t) {g1 d1 t1},
-    f <> nil ->
+Theorem vanilla_backtracking_helper t:
+  forall {f} (stack : AS f t) {b g1 d1 t1},
+    CNFByPAssignment f ∅ = None ->
     t = ((g1,d1)::t1) ->
-    CNFByPAssignment f d1 = Some false ->
+    CNFByPAssignment f d1 = Some b ->
     {g2 & {d2 & {t2 & {a : AS f ((g2,d2)::t2) & CNFByPAssignment f d2 = None}}}}.
+induction t.
++ intros f h. destruct (AS_no_nil h).
++ intros f stack b g1 d1 t1 H0 H1 H2. 
+inversion H1; subst.
+destruct t1 as [_ | [t1g t1d] t1t].
+++ exists ∅. exists ∅. exists nil. exists (empty_as f). auto.
+++ 
+assert (AS f ((t1g, t1d) :: t1t)) as nextSearch; [eapply (AssignmentStackMonotoncity stack); eauto; try (intro; discriminate) | idtac].
+destruct (CNFByPAssignment f t1d) eqn:heqcnf.  
+    apply  (IHt _ nextSearch b0 _ _ _ H0 eq_refl). auto.
+    exists t1g. exists t1d. exists t1t. exists nextSearch. auto.
+Qed.
 
-intros f t stack.
-induction stack; intros g1 d1 t1 H0 H1 H2; eauto.
-+ inversion H1; subst; eauto.   
-Admitted.
+
 
 Definition vanilla_backtracking:
   forall {f l} (st : CDCLState f l), 

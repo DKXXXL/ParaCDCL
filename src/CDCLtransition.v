@@ -1446,8 +1446,10 @@ destruct (SucceedState_Dec st).
 Qed.
 
 Theorem guess_new_literal_then_maybe_conflict {f l} (st: CDCLState f l):
+  ~ FinalState st /\ ~ ConflictingState st ->
   {l2 & {st2 : CDCLState f l2 | (deducedLitNum st2 > deducedLitNum st \/ length l2 > length l) /\ length l2 >= length l /\ ~ConflictingState st2}}.
 Admitted.
+
 
 Definition vanilla_conflicting_analysis:
   forall {f l} (h : f <> nil) {st : CDCLState f l} 
@@ -1532,7 +1534,7 @@ Ltac check_final_state_and_return st h:=
   check_final_state_and_return st h.
  (* Main function starts here  *)
  (* First Do All the Unit Propagation *)
-    destruct (vanilla_propagate_all_unit_clause suggest_fuel st) as [[[st2 [hnuc hnfail]] | [st2 hcflict]] | [st2 [hprog hnfail]]].
+    destruct (vanilla_propagate_all_unit_clause suggest_fuel st) as [[[st2 [hnuc [hnfail1 hnfail2]]] | [st2 hcflict]] | [st2 [hprog hnfail]]].
     + (* If no conflict, and successfully propagate all *)
       (* check fully assigned or not *)
       destruct (SucceedState_Dec st2).
@@ -1542,6 +1544,7 @@ Ltac check_final_state_and_return st h:=
             guess a literal and progress. 
             we know no conflict will happen, but we haven't proved it yet TODO!  *)
         ++ destruct (guess_new_literal_then_maybe_conflict st2) as [l3 [st3 [hprog31 [hprog32 hprog33]]]].
+        unfold FinalState. split; [idtac | auto]. intro HH. pose (nConflictSt_nFailedSt _ hnfail2). destruct HH; try contradiction.
         check_final_state_and_return st3 h.
         right. exists l3. exists st3. repeat split; try auto.
           destruct hprog31; [try lia | auto].

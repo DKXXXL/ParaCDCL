@@ -1367,8 +1367,10 @@ intros f l [trail [astack p]] h0 h1.
 destruct trail as [_ | [g d] t];
 [try destruct (AS_no_nil astack) | idtac].
 cbn in *. 
-destruct (vanilla_backtracking_helper _ astack _ _ h1).
-
+destruct (vanilla_backtracking_helper _ astack h0 eq_refl h1) as [g2 [d2 [t2 [astack2 h2]]]].
+exists (existT _ ((g2, d2) :: t2) (astack2, p)).
+cbn in *. rewrite h2. intro. try discriminate.
+Qed.
 
 
 
@@ -1506,10 +1508,13 @@ Definition CountLiteral (c : CNF V) :=
   fold_right Nat.add 0 (map (fun (l: Clause V) => length l) c).
 
 Lemma EvalOnLess:
-  forall {f l d},
+  forall {l f d},
     CNFByPAssignment (l ++ f) d = Some true ->
     CNFByPAssignment f d = Some true.
-Admitted.
+
+intros l. induction l; intros; eauto; cbn in *.
+repeat breakAssumpt1; cbn in *. inversion H0; subst; eauto.
+Qed.
 
 (* One loop of Vanilla CDCL 
     Which is basically DPLL anyway

@@ -793,10 +793,10 @@ Qed.
 
 
 Definition lift_AS_op  
-  (f : forall {L}, {s1 & AS L s1} -> {s2 & AS L s2}): forall {F L}, CDCLState F L -> CDCLState F L.
+  (f : forall {L s1}, AS L s1 -> {s2 & AS L s2}): forall {F L}, CDCLState F L -> CDCLState F L.
   intros F L st.
   destruct st as [s1 [as1 other]].
-  destruct (f _ (existT _ s1 as1)) as [s2 as2].
+  destruct (f _ _ as1) as [s2 as2].
   exact  (existT _ s2 (as2, other)).
 Qed.
 
@@ -1445,12 +1445,57 @@ destruct (SucceedState_Dec st).
   ++ right. intro H0. destruct H0; try contradiction.
 Qed.
 
-Theorem guess_new_literal_then_maybe_conflict {f l} (st: CDCLState f l):
-  ~ FinalState st /\ ~ ConflictingState st ->
-  {l2 & {st2 : CDCLState f l2 | (deducedLitNum st2 > deducedLitNum st \/ length l2 > length l) /\ length l2 >= length l /\ ~ConflictingState st2}}.
+
+
+Lemma not_all_assigned1  {f d} :
+  CNFByPAssignment f d = None ->
+  exists i, exists (h : i < length f), 
+    ClauseByPAssignment (nthsafe i f h) d = None.
 Admitted.
 
+Lemma not_all_assigned2  {c d} :
+  ClauseByPAssignment c d = None ->
+  exists i, exists (h : i < length c), 
+    LiteralByPAssignment (nthsafe i c h) d = None.
+Admitted.
+  
 
+
+
+Lemma EvalOnLess:
+  forall {l f d},
+    CNFByPAssignment (l ++ f) d = Some true ->
+    CNFByPAssignment f d = Some true.
+
+intros l. induction l; intros; eauto; cbn in *.
+repeat breakAssumpt1; cbn in *. inversion H0; subst; eauto.
+Qed.
+
+
+Lemma not_all_assigned3: forall {f l} (st: CDCLState f l),
+~ SucceedState st /\ ~ ConflictingState st -> forall g d t q,  
+st = existT _ ((g,d)::t) q ->
+  
+  CNFByPAssignment (l ++ f) d = None.
+  unfold FinalState. 
+  intros f l st [h0 h1]  g d t [astack p]  heq. subst; cbn in *.
+  destruct (CNFByPAssignment (l ++ f) d) eqn: heqCNF; auto.
+  destruct b; try contradiction.
+  destruct (h0 (EvalOnLess heqCNF)); eauto.
+Qed.
+  
+  
+Lemma LiteralByPAssignmentNone_PANone: forall {b x l d},
+  l = ToLiteral x b ->
+  LiteralByPAssignment l d = None <->
+  PA d x = None.
+  intros b. unfold LiteralByPAssignment. 
+  intros; subst;
+  destruct b; cbn in *; auto. split; auto.
+  split; intros; repeat breakAssumpt3; auto.
+Qed.
+  
+  
 Definition vanilla_conflicting_analysis:
   forall {f l} (h : f <> nil) {st : CDCLState f l} 
     (H0 :ConflictingState st),
@@ -1463,6 +1508,68 @@ Definition vanilla_conflicting_analysis:
   destruct (find_false_clause heqf H0) as [i [H1 H2]].
   eexists. *)
 Admitted.
+
+
+
+Definition vanilla_no_conflict:
+  forall {f l} (h : f <> nil) (st : CDCLState f l), 
+    {l2 & {st2 : CDCLState f l2 | 
+      deducedLitNum st2 >= deducedLitNum st
+      /\ length l2 >= length l 
+      /\ ~ConflictingState st2}}.
+Admitted.
+
+
+Theorem guess_new_literal_then_maybe_conflict {f l} (st: CDCLState f l) (hnnil : f <> nil)
+  (h0: ~ SucceedState st /\ ~ ConflictingState st) :
+  {l2 & {st2 : CDCLState f l2 | (deducedLitNum st2 > deducedLitNum st \/ length l2 > length l) /\ length l2 >= length l /\ ~ConflictingState st2}}.
+  
+clean_pose (not_all_assigned3 _ h0). clear h0.
+destruct st as [a [astack hp]] eqn:heqst.
+destruct a as [_ | [ag ad] att];[try (destruct (AS_no_nil astack); auto; fail) | idtac].
+clean_pose (h _ _ _ _ eq_refl). clear h.
+clean_pose (not_all_assigned1 h0). clear h0.
+pose (
+  fun x => 
+  match (ClauseByPAssignment x ad) with
+  | None => true
+  | _ => false
+  end
+) as f1.
+pose (
+  fun x => 
+  match (LiteralByPAssignment x ad) with
+  | None => true
+  | _ => false
+  end
+) as f2.
+destruct (find_index f1 (l ++ f)) as [[index1 [hindex1 p1]] | hh].
+unfold f1 in p1. repeat breakAssumpt1.
+destruct (find_index f2 ((nthsafe index1 (l ++ f) hindex1))) as [[index2 [hindex2 p2]] | hh2].
+unfold f2 in p2. repeat breakAssumpt1.
+remember (nthsafe index2 (nthsafe index1 (l ++ f) hindex1) hindex2) as targetL.
+destruct (ToLiteralInjective targetL) as [x [b hxb]].
+
+erewrite  LiteralByPAssignmentNone_PANone in heq0; [idtac | eauto].
+clean_pose (AssignmentStackGSubD2 astack _ heq0).
+assert (AS (l ++ f) ((ag[x:=b]h0, ad[x:=b]heq0)::(ag, ad) :: att)) as nextStack.
+eapply guess_as. apply astack.
+pose ((existT _ ((ag [x := b] h0, ad [x := b] heq0) :: (ag, ad) :: att) (nextStack, hp)): CDCLState f l) as nextState.
+destruct (vanilla_no_conflict  hnnil nextState) as [l3 [st3 [hst31 [hst32 hst33]]]].
+exists l3. 
+exists st3.
+repeat split; try lia; try auto. destruct ad; cbn in *. try lia.
++ (* Contradictions happen here *)
+assert False;[idtac | try contradiction].
+destruct (not_all_assigned2 heq) as [index2 [hindex2 hhindex2]].
+clean_pose (hh2 index2 hindex2). unfold f2 in *. repeat breakAssumpt1.
++ assert False;[idtac | try contradiction].
+destruct h as [index1 [hindex1 hhindex1]].
+clean_pose (hh index1 hindex1). unfold f1 in *. repeat breakAssumpt1; auto.
+Qed.
+
+
+
   (*
 change_goal:
   forall  {g} {s} (f : CNF V),
@@ -1509,15 +1616,6 @@ Qed.
 Definition CountLiteral (c : CNF V) :=
   fold_right Nat.add 0 (map (fun (l: Clause V) => length l) c).
 
-Lemma EvalOnLess:
-  forall {l f d},
-    CNFByPAssignment (l ++ f) d = Some true ->
-    CNFByPAssignment f d = Some true.
-
-intros l. induction l; intros; eauto; cbn in *.
-repeat breakAssumpt1; cbn in *. inversion H0; subst; eauto.
-Qed.
-
 (* One loop of Vanilla CDCL 
     Which is basically DPLL anyway
 *)
@@ -1544,7 +1642,7 @@ Ltac check_final_state_and_return st h:=
             guess a literal and progress. 
             we know no conflict will happen, but we haven't proved it yet TODO!  *)
         ++ destruct (guess_new_literal_then_maybe_conflict st2) as [l3 [st3 [hprog31 [hprog32 hprog33]]]].
-        unfold FinalState. split; [idtac | auto]. intro HH. pose (nConflictSt_nFailedSt _ hnfail2). destruct HH; try contradiction.
+        unfold FinalState. split; [idtac | auto]. intro HH. try contradiction.
         check_final_state_and_return st3 h.
         right. exists l3. exists st3. repeat split; try auto.
           destruct hprog31; [try lia | auto].

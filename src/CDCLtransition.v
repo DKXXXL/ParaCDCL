@@ -1329,12 +1329,33 @@ Theorem vanilla_propagate_all_unit_clause
 Qed.
 
 
+Axiom rp_false_by_eval:
+  forall f, 
+    CNFByPAssignment f ∅ = Some false ->
+    RProof (CNFFormula f) fbot.
+
+
+
+Definition vanilla_backtracking_helper:
+  forall {f t} (stack : AS f t) {g1 d1 t1},
+    f <> nil ->
+    t = ((g1,d1)::t1) ->
+    CNFByPAssignment f d1 = Some false ->
+    {g2 & {d2 & {t2 & {a : AS f ((g2,d2)::t2) & CNFByPAssignment f d2 = None}}}}.
+
+intros f t stack.
+induction stack; intros g1 d1 t1 H0 H1 H2; eauto.
++ inversion H1; subst; eauto.   
+Admitted.
 
 Definition vanilla_backtracking:
   forall {f l} (st : CDCLState f l), 
+  CNFByPAssignment (l ++ f) ∅ = None ->
   ConflictingState st ->
   {st2 : CDCLState f l | ~ ConflictingState st2}.
 Admitted.
+
+
 
 
 (* UnitProp until cannot spec*)
@@ -1432,6 +1453,8 @@ change_goal:
 *)
 
 
+
+
 (* Learn New Clause *)
 Definition learn_CS_spec0 {f learned g}
   (h0 : RProof (CNFFormula (learned ++ f)) (CNFFormula g))
@@ -1466,7 +1489,12 @@ Qed.
 (* Use to fuel *)
 Definition CountLiteral (c : CNF V) :=
   fold_right Nat.add 0 (map (fun (l: Clause V) => length l) c).
-  
+
+Lemma EvalOnLess:
+  forall {f l d},
+    CNFByPAssignment (l ++ f) d = Some true ->
+    CNFByPAssignment f d = Some true.
+Admitted.
 
 (* One loop of Vanilla CDCL 
     Which is basically DPLL anyway
@@ -1512,7 +1540,17 @@ Ltac check_final_state_and_return st h:=
             destruct (vanilla_conflicting_analysis h  hcflict) as [l2 [hl2 hl2n0]].
             destruct (learn_CS_spec1 hl2 st2) as [st3 hst3info].
             destruct (ConflictingState_Dec st3) as [hst3cflict | hst3ncflict].
-            +++ destruct (vanilla_backtracking st3 hst3cflict) as [st4 hncflict].
+            +++ 
+              destruct (CNFByPAssignment ((l2 ++ l) ++ f) ∅) eqn:htrybacktrack.
+              destruct b. 
+              ++++ left. left. exists ∅. eapply EvalOnLess; eauto.
+              ++++ left. right. eapply rp_trans;[idtac | eapply rp_false_by_eval; eauto].
+                    destruct st2 as [a [b hp]].
+                    eapply rp_cnf_conj;[idtac| auto].
+                    eapply rp_cnf_conj;[idtac | auto].
+                    eapply rp_trans; [idtac | eapply hl2].
+                    eapply rp_cnf_conj; eauto.
+              ++++ destruct (vanilla_backtracking st3 htrybacktrack hst3cflict) as [st4 hncflict].
             
             (*TODO we know here it is not final for st4
                 Because we can make backtrack more strict --
@@ -1522,10 +1560,10 @@ Ltac check_final_state_and_return st h:=
             right.
             exists (l2 ++ l). exists st4.
             repeat split; eauto. 
-            ++++ left. rewrite app_length. destruct (eq_dec (length l2) 0) as [ll20 | ll2n0]. 
+            +++++ left. rewrite app_length. destruct (eq_dec (length l2) 0) as [ll20 | ll2n0]. 
             assert (l2 = nil) as Hl2nil; [try eapply  length_zero_iff_nil; eauto | idtac]. try contradiction. lia. 
             
-            ++++  rewrite app_length. lia.
+            +++++  rewrite app_length. lia.
             +++ 
             check_final_state_and_return st3 h.
             right. exists (l2 ++ l). exists st3.

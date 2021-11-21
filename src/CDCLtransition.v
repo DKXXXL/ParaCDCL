@@ -640,7 +640,7 @@ Definition ConflictingState  {f l} (st : CDCLState f l) : Prop :=
       match st with
       | existT _ s _ =>
         match s with
-        | (_, d) :: _ => CNFByPAssignment (f ++ l) d = Some false
+        | (_, d) :: _ => CNFByPAssignment (l ++ f) d = Some false
         | _ => False
         end
       end.
@@ -699,7 +699,7 @@ Definition ConflictingState_Dec:
 destruct st as [st1 st2]. cbn in *.
 destruct st1 as [_ | [g d] t];try_both_side.
   
-destruct (CNFByPAssignment (f ++ l) d); try_both_side.
+destruct (CNFByPAssignment (l ++ f) d); try_both_side.
 destruct b; try_both_side.
 Qed.
 
@@ -1228,15 +1228,15 @@ Qed.
 
 
 Lemma CNFByAssignmentImplication:
-  forall {f l d},
+  forall {l f d},
   CNFByPAssignment f d = Some false ->
-  CNFByPAssignment (f ++ l) d = Some false.
-  intros f. induction f; intros;
-  cbn in *; try discriminate.
-  repeat breakAssumpt1; try_injection; subst; eauto; cbn in *;
-try (erewrite IHf; eauto; cbn in *; auto; fail);
-try (repeat breakAssumpt3; auto).
-Qed.
+  CNFByPAssignment (l ++ f) d = Some false.
+  intros l. induction l; intros;
+  cbn in *; try discriminate. auto.
+  repeat erewrite IHl in *; eauto; cbn in *.
+  breakAssumpt3; cbn in *; simpl_bool; auto.
+  destruct b; auto.
+  Qed.
   
 
 Lemma FailedSt_ConflictSt {f l} (st : CDCLState f l):
@@ -1362,7 +1362,13 @@ Definition vanilla_backtracking:
   CNFByPAssignment (l ++ f) ∅ = None ->
   ConflictingState st ->
   {st2 : CDCLState f l | ~ ConflictingState st2}.
-Admitted.
+
+intros f l [trail [astack p]] h0 h1.
+destruct trail as [_ | [g d] t];
+[try destruct (AS_no_nil astack) | idtac].
+cbn in *. 
+destruct (vanilla_backtracking_helper _ astack _ _ h1).
+
 
 
 

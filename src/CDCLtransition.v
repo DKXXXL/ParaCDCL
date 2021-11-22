@@ -1511,13 +1511,56 @@ Admitted.
 
 
 
+
+(* Learn New Clause *)
+Definition learn_CS_spec0 {f learned g}
+  (h0 : RProof (CNFFormula (learned ++ f)) (CNFFormula g))
+  (h1 : CDCLState f learned):
+  CDCLState f (g ++ learned).
+  destruct h1 as [s1 [as1 proof1]].
+  eexists. split.
+    (* Constructing AS using change goal*)
+    + rewrite <- List.app_assoc.
+      eapply change_goal; [idtac | eapply rp_cnf_weaken]; eauto.
+    (* Constructing RProof using rproof *)
+    + eapply rp_cnf_conj;
+      [idtac | eauto].
+      eapply rp_trans;
+      [idtac | eauto].
+      eapply rp_cnf_conj; eauto.
+Defined.
+
+Definition learn_CS_spec1 {f learned g}
+  (h0 : RProof (CNFFormula (learned ++ f)) (CNFFormula g))
+  (h1 : CDCLState f learned):
+  {st2 : CDCLState f (g ++ learned)
+    | projT1 st2 = projT1 h1
+    }.
+  exists (learn_CS_spec0 h0 h1). 
+  unfold learn_CS_spec0. 
+  destruct h1 as [s1 p].
+  destruct p as [as1 proof1]. cbn in *. auto.
+Qed.
+
 Definition vanilla_no_conflict:
   forall {f l} (h : f <> nil) (st : CDCLState f l), 
     {l2 & {st2 : CDCLState f l2 | 
       deducedLitNum st2 >= deducedLitNum st
       /\ length l2 >= length l 
       /\ ~ConflictingState st2}}.
+(* 
+intros f l h st.
+destruct (ConflictingState_Dec st) as [hcflict | hncflit].
++ destruct (vanilla_conflicting_analysis h hcflict) as [newl [hproof hx]].
+exists (newl ++ l). 
+destruct (learn_CS_spec1 hproof st) as [st2 hst2].
+destruct (ConflictingState_Dec st2).
+exists st2. rewrite 
++ exists l. exists st. repeat split; eauto.  *)
 Admitted.
+
+
+
 
 
 Theorem guess_new_literal_then_maybe_conflict {f l} (st: CDCLState f l) (hnnil : f <> nil)
@@ -1581,35 +1624,7 @@ change_goal:
 
 
 
-(* Learn New Clause *)
-Definition learn_CS_spec0 {f learned g}
-  (h0 : RProof (CNFFormula (learned ++ f)) (CNFFormula g))
-  (h1 : CDCLState f learned):
-  CDCLState f (g ++ learned).
-  destruct h1 as [s1 [as1 proof1]].
-  eexists. split.
-    (* Constructing AS using change goal*)
-    + rewrite <- List.app_assoc.
-      eapply change_goal; [idtac | eapply rp_cnf_weaken]; eauto.
-    (* Constructing RProof using rproof *)
-    + eapply rp_cnf_conj;
-      [idtac | eauto].
-      eapply rp_trans;
-      [idtac | eauto].
-      eapply rp_cnf_conj; eauto.
-Defined.
 
-Definition learn_CS_spec1 {f learned g}
-  (h0 : RProof (CNFFormula (learned ++ f)) (CNFFormula g))
-  (h1 : CDCLState f learned):
-  {st2 : CDCLState f (g ++ learned)
-    | projT1 st2 = projT1 h1
-    }.
-  exists (learn_CS_spec0 h0 h1). 
-  unfold learn_CS_spec0. 
-  destruct h1 as [s1 p].
-  destruct p as [as1 proof1]. cbn in *. auto.
-Qed.
 
 
 (* Use to fuel *)
@@ -1642,7 +1657,7 @@ Ltac check_final_state_and_return st h:=
             guess a literal and progress. 
             we know no conflict will happen, but we haven't proved it yet TODO!  *)
         ++ destruct (guess_new_literal_then_maybe_conflict st2) as [l3 [st3 [hprog31 [hprog32 hprog33]]]].
-        unfold FinalState. split; [idtac | auto]. intro HH. try contradiction.
+        unfold FinalState. auto. split; [idtac | auto]. intro HH. try contradiction.
         check_final_state_and_return st3 h.
         right. exists l3. exists st3. repeat split; try auto.
           destruct hprog31; [try lia | auto].

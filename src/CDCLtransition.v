@@ -1542,7 +1542,7 @@ Definition learn_CS_spec1 {f learned g}
   destruct p as [as1 proof1]. cbn in *. auto.
 Qed.
 
-Definition vanilla_no_conflict:
+(* Definition vanilla_no_conflict:
   forall {f l} (h : f <> nil) (st : CDCLState f l), 
     {l2 & {st2 : CDCLState f l2 | 
       deducedLitNum st2 >= deducedLitNum st
@@ -1557,14 +1557,20 @@ destruct (learn_CS_spec1 hproof st) as [st2 hst2].
 destruct (ConflictingState_Dec st2).
 exists st2. rewrite 
 + exists l. exists st. repeat split; eauto.  *)
+Admitted. *)
+
+
+Lemma NoUnitClause_NoConflictOneMoreDeduced:
+ forall {f l} (st st2: CDCLState f l) (hnnil : f <> nil), 
+  NoUnitClause st ->
+  ((deducedLitNum st2) = S (deducedLitNum st)) ->
+  ~ConflictingState st2.
 Admitted.
 
 
-
-
-
-Theorem guess_new_literal_then_maybe_conflict {f l} (st: CDCLState f l) (hnnil : f <> nil)
+Theorem guess_new_literal_and_no_conflict {f l} (st: CDCLState f l) (hnnil : f <> nil)
   (h0: ~ SucceedState st /\ ~ ConflictingState st) :
+  NoUnitClause st ->
   {l2 & {st2 : CDCLState f l2 | (deducedLitNum st2 > deducedLitNum st \/ length l2 > length l) /\ length l2 >= length l /\ ~ConflictingState st2}}.
   
 clean_pose (not_all_assigned3 _ h0). clear h0.
@@ -1598,10 +1604,13 @@ clean_pose (AssignmentStackGSubD2 astack _ heq0).
 assert (AS (l ++ f) ((ag[x:=b]h0, ad[x:=b]heq0)::(ag, ad) :: att)) as nextStack.
 eapply guess_as. apply astack.
 pose ((existT _ ((ag [x := b] h0, ad [x := b] heq0) :: (ag, ad) :: att) (nextStack, hp)): CDCLState f l) as nextState.
-destruct (vanilla_no_conflict  hnnil nextState) as [l3 [st3 [hst31 [hst32 hst33]]]].
-exists l3. 
-exists st3.
+(* destruct (vanilla_no_conflict  hnnil nextState) as [l3 [st3 [hst31 [hst32 hst33]]]]. *)
+exists l. 
+exists nextState.
 repeat split; try lia; try auto. destruct ad; cbn in *. try lia.
+eapply NoUnitClause_NoConflictOneMoreDeduced; eauto. 
+destruct ad. cbn in *. auto.
+
 + (* Contradictions happen here *)
 assert False;[idtac | try contradiction].
 destruct (not_all_assigned2 heq) as [index2 [hindex2 hhindex2]].
@@ -1610,7 +1619,6 @@ clean_pose (hh2 index2 hindex2). unfold f2 in *. repeat breakAssumpt1.
 destruct h as [index1 [hindex1 hhindex1]].
 clean_pose (hh index1 hindex1). unfold f1 in *. repeat breakAssumpt1; auto.
 Qed.
-
 
 
   (*
@@ -1656,8 +1664,8 @@ Ltac check_final_state_and_return st h:=
         (* If it is not, 
             guess a literal and progress. 
             we know no conflict will happen, but we haven't proved it yet TODO!  *)
-        ++ destruct (guess_new_literal_then_maybe_conflict st2) as [l3 [st3 [hprog31 [hprog32 hprog33]]]].
-        unfold FinalState. auto. split; [idtac | auto]. intro HH. try contradiction.
+        ++ destruct (guess_new_literal_and_no_conflict st2) as [l3 [st3 [hprog31 [hprog32 hprog33]]]].
+        unfold FinalState. auto. split; [idtac | auto]. intro HH. try contradiction. auto.
         check_final_state_and_return st3 h.
         right. exists l3. exists st3. repeat split; try auto.
           destruct hprog31; [try lia | auto].

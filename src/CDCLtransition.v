@@ -1494,7 +1494,23 @@ Lemma LiteralByPAssignmentNone_PANone: forall {b x l d},
   destruct b; cbn in *; auto. split; auto.
   split; intros; repeat breakAssumpt3; auto.
 Qed.
-  
+
+Fixpoint negLiteralForm {V : Set} `{EqDec_eq V} {f} (fa : FiniteAssignment f) {struct fa} : Clause V :=
+  match fa with
+  | empty_fa => nil
+  | assign_fa v b f' _ => (ToLiteral v (negb b)) :: (negLiteralForm f')
+  end.
+
+Definition negLiteralFormPA {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Clause V :=
+  let (f, p) := pa 
+  in negLiteralForm p.
+
+
+Axiom rp_cnf_false_neg:
+  forall {f d},
+  CNFByPAssignment f d = Some false ->
+  RProof (CNFFormula f) (CNFFormula ((negLiteralFormPA d)::nil)).
+
   
 Definition vanilla_conflicting_analysis:
   forall {f l} (h : f <> nil) {st : CDCLState f l} 
@@ -1503,11 +1519,10 @@ Definition vanilla_conflicting_analysis:
   unfold ConflictingState.
   intros. destruct st as [s [h1 h2]].
   destruct s as [_ | [g d] t]; try contradiction.
-  destruct f as [ _ | fh ft] eqn: heqf; try contradiction.
-  (* rewrite <- heqf in H0.
-  destruct (find_false_clause heqf H0) as [i [H1 H2]].
-  eexists. *)
-Admitted.
+  exists (((negLiteralFormPA d)::nil)).
+  eexists (rp_cnf_false_neg _); eauto. intro. try discriminate.
+  Unshelve. auto.
+Qed.
 
 
 
@@ -1542,22 +1557,7 @@ Definition learn_CS_spec1 {f learned g}
   destruct p as [as1 proof1]. cbn in *. auto.
 Qed.
 
-(* Definition vanilla_no_conflict:
-  forall {f l} (h : f <> nil) (st : CDCLState f l), 
-    {l2 & {st2 : CDCLState f l2 | 
-      deducedLitNum st2 >= deducedLitNum st
-      /\ length l2 >= length l 
-      /\ ~ConflictingState st2}}.
-(* 
-intros f l h st.
-destruct (ConflictingState_Dec st) as [hcflict | hncflit].
-+ destruct (vanilla_conflicting_analysis h hcflict) as [newl [hproof hx]].
-exists (newl ++ l). 
-destruct (learn_CS_spec1 hproof st) as [st2 hst2].
-destruct (ConflictingState_Dec st2).
-exists st2. rewrite 
-+ exists l. exists st. repeat split; eauto.  *)
-Admitted. *)
+
 
 
 Lemma NoUnitClause_NoConflictOneMoreDeduced:

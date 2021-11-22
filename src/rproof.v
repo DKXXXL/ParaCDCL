@@ -281,6 +281,21 @@ Lemma nthsafe_red:
 Qed.
 
 
+Fixpoint negLiteralForm {V : Set} `{EqDec_eq V} {f} (fa : FiniteAssignment f) {struct fa} : Clause V :=
+  match fa with
+  | empty_fa => nil
+  | assign_fa v b f' _ => (ToLiteral v (negb b)) :: (negLiteralForm f')
+  end.
+
+Definition negLiteralFormPA {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Clause V :=
+  let (f, p) := pa 
+  in negLiteralForm p.
+
+Theorem negLiteralFormPA_spec:
+  forall p d,
+    FormulaByAssignment (fneg (LiteralsFormPA p)) d = ClauseByAssignment (negLiteralFormPA p) d.
+Admitted.
+
 Inductive RProof {V: Set} `{EqDec_eq V}: Formula V -> Formula V -> Set :=
   | rp_id : forall x, RProof x x
   | rp_trans : forall {x y z},
@@ -356,7 +371,13 @@ Inductive RProof {V: Set} `{EqDec_eq V}: Formula V -> Formula V -> Set :=
     (forall j (h' : j < length c), 
       j <> i ->
       LiteralByPAssignment (nthsafe j c h') d = Some false) ->
-    RProof (fconj (ClauseFormula c) (LiteralsFormPA d)) (flit (nthsafe i c h)).
+    RProof (fconj (ClauseFormula c) (LiteralsFormPA d)) (flit (nthsafe i c h))
+  | rp_cnf_false_neg:
+  forall {f :CNF V} {d},
+    CNFByPAssignment f d = Some false ->
+    RProof (CNFFormula f) (CNFFormula ((negLiteralFormPA d)::nil)).
+
+
 
 
 Definition rproofByAssignment :=
@@ -438,7 +459,6 @@ Lemma refinement_invariance: forall {V : Set} `{EqDec_eq V} {c} {b a}
     repeat (erewrite IHc; eauto; fail).
 Qed.
 
-Search (orb _ true).
 
 Ltac simpl_bool:=
   cbn in *; repeat 

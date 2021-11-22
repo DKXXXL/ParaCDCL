@@ -957,8 +957,6 @@ Theorem partition (f : A -> bool) (l : list A):
 
 
 
-(* Search ({_ < _} + {_}). *)
-
 
 
 Definition UnitClause_UnitLiteral {c a} (u : UnitClause c a) : Literal V.
@@ -1178,8 +1176,6 @@ Theorem NoUnitClause_computable: forall {f l} {st : CDCLState f l},
   + eapply CountUnitClauses0_iff_allnotunitclauseB; auto.
   + eapply CountUnitClauses0_iff_allnotunitclauseA; auto.
 Qed.
-
-Print sumor.
 
 
 Theorem HasUnitClause_Dec:
@@ -1494,22 +1490,6 @@ Lemma LiteralByPAssignmentNone_PANone: forall {b x l d},
   destruct b; cbn in *; auto. split; auto.
   split; intros; repeat breakAssumpt3; auto.
 Qed.
-
-Fixpoint negLiteralForm {V : Set} `{EqDec_eq V} {f} (fa : FiniteAssignment f) {struct fa} : Clause V :=
-  match fa with
-  | empty_fa => nil
-  | assign_fa v b f' _ => (ToLiteral v (negb b)) :: (negLiteralForm f')
-  end.
-
-Definition negLiteralFormPA {V : Set} `{EqDec_eq V} (pa : PAssignment V) : Clause V :=
-  let (f, p) := pa 
-  in negLiteralForm p.
-
-
-Axiom rp_cnf_false_neg:
-  forall {f d},
-  CNFByPAssignment f d = Some false ->
-  RProof (CNFFormula f) (CNFFormula ((negLiteralFormPA d)::nil)).
 
   
 Definition vanilla_conflicting_analysis:

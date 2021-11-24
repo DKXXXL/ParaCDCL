@@ -375,7 +375,11 @@ Inductive RProof {V: Set} `{EqDec_eq V}: Formula V -> Formula V -> Set :=
   | rp_cnf_false_neg:
   forall {f :CNF V} {d},
     CNFByPAssignment f d = Some false ->
-    RProof (CNFFormula f) (CNFFormula ((negLiteralFormPA d)::nil)).
+    RProof (CNFFormula f) (CNFFormula ((negLiteralFormPA d)::nil))
+  | rp_false_by_eval:
+  forall f, 
+    CNFByPAssignment f ∅ = Some false ->
+    RProof (CNFFormula f) fbot.
 
 
 

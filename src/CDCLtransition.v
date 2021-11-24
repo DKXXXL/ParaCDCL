@@ -17,7 +17,8 @@ Open Scope type_scope.
 Open Scope list_scope.
 
 
-Section CDCLtransition.
+
+Module CDCLtransition.
 
 
 
@@ -1254,23 +1255,6 @@ Qed.
 
 
 
-(* Theorem FindUnitClauseOrNone: forall {f l} {st : CDCLState f l}, 
-  {i & {h : i < length (l ++ f) | }} + {NoUnitClause st}. *)
-
-
-
-
-
-
-
-(* Theorem vanilla_propagate_all_unit_clause:
-  forall (C : CNF V) {trail},
-  AS C trail ->
-  {trail2 & 
-    AS C trail2 *
-    { h : trail2 <> nil |
-    NoUnitClause C trail2 h}}. *)
-
 
 
 Lemma CNFByAssignmentImplication:
@@ -1305,80 +1289,6 @@ Qed.
 
 
 
-Lemma vanilla_propagate_all_unit_clause_onestep:
-  forall {f l} (st : CDCLState f l), 
-  CountUnitClausesIn st <> 0 /\ ~ConflictingState st ->
-  {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\ ~ConflictingState st2}
-  + {st2 : CDCLState f l | ConflictingState st2}.
-
-Ltac check_conflicting_state_and_return st:=
-  let hfinal := fresh "hfinal"
-  in let    H := fresh "H"
-  in destruct (ConflictingState_Dec st) as [Hfinal | H]; [right; exists st; auto | idtac].
-  
-  intros f l st [h0 h1].
-  destruct (HasUnitClause_Dec st) as [h2 | h2].
-  + destruct (UnitClause_AS_spec_in_st _ h2) as [st2 h3].
-    check_conflicting_state_and_return st2.
-    left. exists st2. eauto.
-  + rewrite (NoUnitClause_computable) in h2. try contradiction.
-Qed.
-
-
-
-(* TODO Prove the termination of unit propagation *)
-Theorem vanilla_propagate_all_unit_clause
-    (fuel : nat): forall {f l} (st : CDCLState f l),
-    {st2 : CDCLState f l | deducedLitNum st2 >= deducedLitNum st /\ NoUnitClause st2 /\ ~ConflictingState st2}
-    + {st2 : CDCLState f l | ConflictingState st2}
-    + {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\  ~ ConflictingState st2 }.
-  induction fuel.
-  + intros f l st.
-    (* When fuel used up *)
-    destruct (ConflictingState_Dec st) as [hfail | hnfail].
-    ++ left. right. exists st. auto.
-    ++ destruct (CountUnitClausesIn st) eqn:hucn.
-       assert (NoUnitClause st) as HNUC; [try (eapply NoUnitClause_computable; eauto; fail) | idtac].
-       left. left. exists st. repeat split; [try auto | try apply HNUC | try apply hnfail].
-       assert (CountUnitClausesIn st <> 0) as hucn0; [try lia | idtac].
-       destruct (vanilla_propagate_all_unit_clause_onestep st) as [[st2 [h1 h2]] | [st2 h1]].
-       split; auto. 
-       right. exists st2. auto.
-       left. right. exists st2. auto.
-  + (* When fuel has left*)
-    intros f l st.
-    (* Still check if failed *)
-    destruct (ConflictingState_Dec st) as [hfail | hnfail].
-    ++ left. right. exists st. auto.
-    ++ destruct (CountUnitClausesIn st) eqn:hucn.
-    +++
-       (* No Unit Clause! We are done *)
-       assert (NoUnitClause st) as HNUC; [try (eapply NoUnitClause_computable; eauto; fail) | idtac].
-       left. left. exists st. repeat split; [try auto | try apply HNUC | apply hnfail].
-    +++  
-       (* Still Unit Clause...  *)
-       assert (CountUnitClausesIn st <> 0) as hucn0; [try lia | idtac].
-    (* We progress one step and see if the result is good *)
-      destruct (vanilla_propagate_all_unit_clause_onestep st) as [[st2 [h1 h2]] | [st2 h1]].
-      split; auto.
-      ++++
-        destruct (IHfuel _ _ st2) as [[[st3 hrec] | [st3 hrec]] | [st3 hrec]].
-        +++++ left. left. exists st3. destruct hrec as [hrec1 [hrec2 hrec3]]; repeat split; try auto. try lia.
-        +++++ left. right. exists st3. auto.
-        +++++ destruct (ConflictingState_Dec st3) as [fail0 | nfail0]. 
-          ++++++  
-                left. right. exists st3. auto.
-          ++++++      right.  exists st3. split; auto; try lia.
-      ++++ left. right. exists st2. apply h1.
-    (* NOT Failure yet, check if it has any more unit clause*)
-
-Qed.
-
-
-Axiom rp_false_by_eval:
-  forall f, 
-    CNFByPAssignment f ∅ = Some false ->
-    RProof (CNFFormula f) fbot.
 
 
 
@@ -1541,19 +1451,6 @@ Lemma LiteralByPAssignmentNone_PANone: forall {b x l d},
   split; intros; repeat breakAssumpt3; auto.
 Qed.
 
-  
-Definition vanilla_conflicting_analysis:
-  forall {f l} (h : f <> nil) {st : CDCLState f l} 
-    (H0 :ConflictingState st),
-    {l2 & {_: RProof (CNFFormula (l ++ f)) (CNFFormula l2) | l2 <> nil}}.
-  unfold ConflictingState.
-  intros. destruct st as [s [h1 h2]].
-  destruct s as [_ | [g d] t]; try contradiction.
-  exists (((negLiteralFormPA d)::nil)).
-  eexists (rp_cnf_false_neg _); eauto. intro. try discriminate.
-  Unshelve. auto.
-Qed.
-
 
 
 
@@ -1669,12 +1566,246 @@ change_goal:
 
 
 
-
-
-
 (* Use to fuel *)
 Definition CountLiteral (c : CNF V) :=
   fold_right Nat.add 0 (map (fun (l: Clause V) => length l) c).
+
+(* 
+  The following three heuristic oriented function
+  As long as the 
+*)
+Parameter propagate_all_unit_clause:
+  forall (fuel : nat) {f l} (st : CDCLState f l),
+{st2 : CDCLState f l | deducedLitNum st2 >= deducedLitNum st /\ NoUnitClause st2 /\ ~ConflictingState st2}
++ {st2 : CDCLState f l | ConflictingState st2}
++ {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\  ~ ConflictingState st2 }.
+
+Parameter conflicting_analysis:
+  forall {f l} (h : f <> nil) {st : CDCLState f l} 
+    (H0 :ConflictingState st),
+    {l2 & {_: RProof (CNFFormula (l ++ f)) (CNFFormula l2) | l2 <> nil}}.
+
+Parameter backtracking :
+  forall {f l} (st : CDCLState f l), 
+    CNFByPAssignment (l ++ f) ∅ = None ->
+    ConflictingState st ->
+    {st2 : CDCLState f l | ~ ConflictingState st2}.
+
+Definition CDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (suggest_fuel : nat):
+{g | CNFByPAssignment f g =  Some true} 
++ RProof (CNFFormula f) fbot
++ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2 /\ ~ ConflictingState st2  /\ (length l2 >= length l)}}. (* Progress on Learned! *)
+
+Ltac check_final_state_and_return st h:=
+  let hfinal := fresh "hfinal"
+  in let    H := fresh "H"
+  in destruct (FinalState_Dec2 st h) as [Hfinal | H]; [left; auto | idtac].
+
+  check_final_state_and_return st h.
+ (* Main function starts here  *)
+ (* First Do All the Unit Propagation *)
+    destruct (propagate_all_unit_clause suggest_fuel st) as [[[st2 [hnuc [hnfail1 hnfail2]]] | [st2 hcflict]] | [st2 [hprog hnfail]]].
+    + (* If no conflict, and successfully propagate all *)
+      (* check fully assigned or not *)
+      destruct (SucceedState_Dec st2).
+        (* if it is fully assigned, then success extract*)
+        ++ left. left. eapply (SucceedSt_extract st2); auto. 
+        (* If it is not, 
+            guess a literal and progress. 
+            we know no conflict will happen, but we haven't proved it yet TODO!  *)
+        ++ destruct (guess_new_literal_and_no_conflict st2) as [l3 [st3 [hprog31 [hprog32 hprog33]]]].
+        unfold FinalState. auto. split; [idtac | auto]. intro HH. try contradiction. auto.
+        check_final_state_and_return st3 h.
+        right. exists l3. exists st3. repeat split; try auto.
+          destruct hprog31; [try lia | auto].
+    (* If conflict happens *)
+    + destruct (FailedState_Dec st2).
+      (* check if failure state *)
+          (* if failure, uses failure extract *)
+          ++ left. right. eapply (FailedSt_extract st2); auto.  
+          (* if not *)
+          ++
+             (*TODO we know here it is not final for st2
+                Because we can prove ConflictingState st2 -> ~ SucceedState st2.
+             *)
+            check_final_state_and_return st2 h.
+            (* Do conflict analysis to get a new learned clause *)
+            destruct (conflicting_analysis h  hcflict) as [l2 [hl2 hl2n0]].
+            destruct (learn_CS_spec1 hl2 st2) as [st3 hst3info].
+            destruct (ConflictingState_Dec st3) as [hst3cflict | hst3ncflict].
+            +++ 
+              destruct (CNFByPAssignment ((l2 ++ l) ++ f) ∅) eqn:htrybacktrack.
+              destruct b. 
+              ++++ left. left. exists ∅. eapply EvalOnLess; eauto.
+              ++++ left. right. eapply rp_trans;[idtac | eapply rp_false_by_eval; eauto].
+                    destruct st2 as [a [b hp]].
+                    eapply rp_cnf_conj;[idtac| auto].
+                    eapply rp_cnf_conj;[idtac | auto].
+                    eapply rp_trans; [idtac | eapply hl2].
+                    eapply rp_cnf_conj; eauto.
+              ++++ destruct (backtracking st3 htrybacktrack hst3cflict) as [st4 hncflict].
+            
+            (*TODO we know here it is not final for st4
+                Because we can make backtrack more strict --
+                make it return state s.t. CNFByPAssignment f 
+             *)
+            check_final_state_and_return st4 h.
+            right.
+            exists (l2 ++ l). exists st4.
+            repeat split; eauto. 
+            +++++ left. rewrite app_length. destruct (eq_dec (length l2) 0) as [ll20 | ll2n0]. 
+            assert (l2 = nil) as Hl2nil; [try eapply  length_zero_iff_nil; eauto | idtac]. try contradiction. lia. 
+            
+            +++++  rewrite app_length. lia.
+            +++ 
+            check_final_state_and_return st3 h.
+            right. exists (l2 ++ l). exists st3.
+            repeat split; eauto. 
+            ++++ left. rewrite app_length. destruct (eq_dec (length l2) 0) as [ll20 | ll2n0]. 
+            assert (l2 = nil) as Hl2nil; [try eapply  length_zero_iff_nil; eauto | idtac]. try contradiction. lia.
+            ++++  rewrite app_length. lia.
++ check_final_state_and_return st2 h.
+  right.  exists l. exists st2.
+  repeat split; eauto.
+Qed. 
+
+
+
+(* The multi-step CDCL Alg *)
+Fixpoint CDCLMultiStepAlg  (fuel : nat) {f l: CNF V} (st : CDCLState f l) (h : f <> nil) {struct fuel}:  
+{g | CNFByPAssignment f g =  Some true} 
++ RProof (CNFFormula f) fbot
++ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2 /\ ~ ConflictingState st2  /\ (length l2 >= length l)}}. (* Progress on Learned! *)
+pose (CountLiteral (f ++ l)) as total_literal.
+destruct fuel eqn:heqnfuel; intros.
++ apply (CDCLOneStep st h total_literal).
++ (* Some more Fuel*) 
+destruct (CDCLOneStep st h total_literal) as [hfinal | [l2 [st2 [hnfinal11 [hnfinal12 [hnfinal13 hnfinal14]]]]]].
+++ left. apply hfinal.
+++ destruct (CDCLMultiStepAlg n _ _ st2 h) as [hfinal3 | [l3 [st3 [hnfinal31 [hnfinal32 [hnfinal33 hnfinal34]]]]]].
+  +++ left. apply hfinal3.
+  +++ right. exists l3. exists st3. split; auto. 
+  destruct hnfinal31 as [hnfinal311 | hnfinal312];
+  destruct hnfinal11 as [hnfinal111 | hnfinal112];
+  try lia.
+  repeat split; auto. try lia.
+Qed.
+
+
+(* The main Procedure to be extract *)
+Definition CDCLAlg  (fuel : nat) {f: CNF V}:  
+{g | CNFByPAssignment f g =  Some true} 
++ RProof (CNFFormula f) fbot
++ {l2 & {st2 : CDCLState f l2 |  ~ FinalState st2 /\ ~ ConflictingState st2}}. (* Progress on Learned! *)
+destruct f eqn:heqf.
++ (* f = nil*)
+  left. left. exists ∅. cbn in *; auto.
++ assert (f <> nil) as hneqnil;[intro Hcontra; subst; auto; try discriminate | idtac].
+  assert (CDCLState f nil) as initialState.
+  unfold CDCLState. cbn in *. exists ((∅,∅)::nil). split; [apply empty_as; auto | auto]. 
+  destruct (CDCLMultiStepAlg fuel initialState hneqnil) as [[h1 | h2 ]| h3]; subst.
+  ++ left. left.  subst. apply h1.
+  ++ left. right. auto.
+  ++ right. destruct h3 as [h31 [h32 h33]]. exists h31. exists h32. auto.
+      destruct h33 as [h331 [h332 [h333 h334]]]; auto.
+Qed.
+
+
+
+End CDCLtransition.
+
+
+(* We implement the easiest  *)
+Section VanillaCDCL.
+
+
+Context {V:Set}.
+
+Context {H: EqDec_eq V}.
+
+
+  
+Definition vanilla_conflicting_analysis:
+  forall {f l} (h : f <> nil) {st : CDCLState f l} 
+    (H0 :ConflictingState st),
+    {l2 & {_: RProof (CNFFormula (l ++ f)) (CNFFormula l2) | l2 <> nil}}.
+  unfold ConflictingState.
+  intros. destruct st as [s [h1 h2]].
+  destruct s as [_ | [g d] t]; try contradiction.
+  exists (((negLiteralFormPA d)::nil)).
+  eexists (rp_cnf_false_neg _); eauto. intro. try discriminate.
+  Unshelve. auto.
+Qed.
+
+Lemma vanilla_propagate_all_unit_clause_onestep:
+  forall {f l} (st : CDCLState f l), 
+  CountUnitClausesIn st <> 0 /\ ~ConflictingState st ->
+  {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\ ~ConflictingState st2}
+  + {st2 : CDCLState f l | ConflictingState st2}.
+
+Ltac check_conflicting_state_and_return st:=
+  let hfinal := fresh "hfinal"
+  in let    H := fresh "H"
+  in destruct (ConflictingState_Dec st) as [Hfinal | H]; [right; exists st; auto | idtac].
+  
+  intros f l st [h0 h1].
+  destruct (HasUnitClause_Dec st) as [h2 | h2].
+  + destruct (UnitClause_AS_spec_in_st _ h2) as [st2 h3].
+    check_conflicting_state_and_return st2.
+    left. exists st2. eauto.
+  + rewrite (NoUnitClause_computable) in h2. try contradiction.
+Qed.
+
+
+
+(* TODO Prove the termination of unit propagation *)
+Theorem vanilla_propagate_all_unit_clause
+    (fuel : nat): forall {f l} (st : CDCLState f l),
+    {st2 : CDCLState f l | deducedLitNum st2 >= deducedLitNum st /\ NoUnitClause st2 /\ ~ConflictingState st2}
+    + {st2 : CDCLState f l | ConflictingState st2}
+    + {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\  ~ ConflictingState st2 }.
+  induction fuel.
+  + intros f l st.
+    (* When fuel used up *)
+    destruct (ConflictingState_Dec st) as [hfail | hnfail].
+    ++ left. right. exists st. auto.
+    ++ destruct (CountUnitClausesIn st) eqn:hucn.
+       assert (NoUnitClause st) as HNUC; [try (eapply NoUnitClause_computable; eauto; fail) | idtac].
+       left. left. exists st. repeat split; [try auto | try apply HNUC | try apply hnfail].
+       assert (CountUnitClausesIn st <> 0) as hucn0; [try lia | idtac].
+       destruct (vanilla_propagate_all_unit_clause_onestep st) as [[st2 [h1 h2]] | [st2 h1]].
+       split; auto. 
+       right. exists st2. auto.
+       left. right. exists st2. auto.
+  + (* When fuel has left*)
+    intros f l st.
+    (* Still check if failed *)
+    destruct (ConflictingState_Dec st) as [hfail | hnfail].
+    ++ left. right. exists st. auto.
+    ++ destruct (CountUnitClausesIn st) eqn:hucn.
+    +++
+       (* No Unit Clause! We are done *)
+       assert (NoUnitClause st) as HNUC; [try (eapply NoUnitClause_computable; eauto; fail) | idtac].
+       left. left. exists st. repeat split; [try auto | try apply HNUC | apply hnfail].
+    +++  
+       (* Still Unit Clause...  *)
+       assert (CountUnitClausesIn st <> 0) as hucn0; [try lia | idtac].
+    (* We progress one step and see if the result is good *)
+      destruct (vanilla_propagate_all_unit_clause_onestep st) as [[st2 [h1 h2]] | [st2 h1]].
+      split; auto.
+      ++++
+        destruct (IHfuel _ _ st2) as [[[st3 hrec] | [st3 hrec]] | [st3 hrec]].
+        +++++ left. left. exists st3. destruct hrec as [hrec1 [hrec2 hrec3]]; repeat split; try auto. try lia.
+        +++++ left. right. exists st3. auto.
+        +++++ destruct (ConflictingState_Dec st3) as [fail0 | nfail0]. 
+          ++++++  
+                left. right. exists st3. auto.
+          ++++++      right.  exists st3. split; auto; try lia.
+      ++++ left. right. exists st2. apply h1.
+    (* NOT Failure yet, check if it has any more unit clause*)
+
+Qed.
+
 
 (* One loop of Vanilla CDCL 
     Which is basically DPLL anyway
@@ -1814,7 +1945,6 @@ Qed.
  Full 
 *)
 
-End CDCLtransition.
 
 
-Extraction "CDCLCompute.ml" VanillaCDCLAlg.
+(* Extraction "CDCLCompute.ml" VanillaCDCLAlg. *)

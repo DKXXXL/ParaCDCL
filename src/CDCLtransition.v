@@ -1795,3 +1795,6 @@ Qed.
 *)
 
 End CDCLtransition.
+
+
+Extraction "CDCLCompute.ml" VanillaCDCLAlg.

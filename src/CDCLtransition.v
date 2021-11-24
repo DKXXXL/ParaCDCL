@@ -10,6 +10,8 @@ Require Import Coq.Classes.EquivDec.
 Require Import Coq.Logic.Decidable.
 Require Import Coq.Lists.List.
 Require Import Coq.micromega.Lia.
+Require Coq.extraction.Extraction.
+Extraction Language OCaml.
 
 Open Scope type_scope.
 Open Scope list_scope.
@@ -822,12 +824,12 @@ Defined. *)
 
 
 Definition UnitClause (c : Clause V) a :=
-  {i & { h : i < length c |
+  {i | exists h : i < length c,
        LiteralByPAssignment (nthsafe i c h) a = None
        /\ forall j (h2 : j < length c), 
             j <> i -> 
             LiteralByPAssignment (nthsafe j c h2) a = Some false
-  }}.
+  }.
 
 Lemma UnitClauseNeverEmpty c :
   forall {a}, UnitClause c a ->
@@ -863,7 +865,7 @@ Definition isNone {A : Type} (k : option A) :=
 
 
 
-Theorem find_index {A:Type} (f : A -> bool) (l : list A) :
+(* Theorem find_index {A:Type} (f : A -> bool) (l : list A) :
   {i : nat | {h : i < length l |  f(nthsafe i l h) = true}} 
   + {forall i (h : i < length l), f(nthsafe i l h) = false}.
   induction l.
@@ -874,8 +876,22 @@ Theorem find_index {A:Type} (f : A -> bool) (l : list A) :
     ++ destruct (f a) eqn:hfa.
         +++ left. exists 0. cbn in *. eexists; eauto. lia.
         +++ right. intros i h2. destruct i; try (cbn in *; eauto; fail).
-Qed.    
+Qed.     *)
 
+
+Theorem find_index {A:Type} (f : A -> bool) (l : list A) :
+  {i : nat | exists h : i < length l, f(nthsafe i l h) = true} 
+  + {(forall (i:nat) (h : i < length l), f(nthsafe i l h) = false)}.
+  induction l.
+  + right. intros. cbn in *. lia. 
+  + destruct IHl as [[i hindex] | hfail].
+    ++ left.  exists (S i). destruct hindex as [h hindex]. assert (S i < length (a :: l)) as hlt; try (cbn in *; try lia; fail).
+     
+    exists hlt. cbn in hlt. erewrite nthsafe_red.  eauto.
+    ++ destruct (f a) eqn:hfa.
+        +++ left. exists 0. cbn in *. eexists; eauto. lia.
+        +++ right. intros i h2. destruct i; try (cbn in *; eauto; fail).
+Qed.    
 
 
 
@@ -913,14 +929,16 @@ Axiom UnitClauseComputable1:
 Lemma UnitClause_computable_chara:
   forall {c a},
     UnitClause c a ->
-    {i & { h : i < length c | (
+    {i | exists h : i < length c, (
   (LiteralByPAssignment (nthsafe i c h) a) = None
   /\ length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c) = (length c) - 1
   /\ c <> nil
-  )} }.
+  )} .
   intros c a h.
-  destruct h as [index [h0 [h01 h02]]].
-  exists index. exists h0.
+  destruct h as [index h0].
+  exists index. 
+  destruct h0 as [h01 h02].
+  exists h01.
   eapply UnitClauseComputable0; eauto.
 Qed.
 
@@ -932,15 +950,17 @@ Theorem UnitClause_Dec:
 destruct c eqn:heqc;[right; eapply UnitClauseNeverEmpty'; eauto | idtac].
 assert (c <> nil); [try intro; subst; try contradiction; try discriminate | idtac].
 intros a. 
-destruct (find_index (fun x => isNone (LiteralByPAssignment x a)) c) as [[i [h hf]] | hk]; unfold isSomefalse in *;
+destruct (find_index (fun x => isNone (LiteralByPAssignment x a)) c) as [[i hhf] | hk]; unfold isSomefalse in *;
 try (right; intro HC; destruct (UnitClause_computable_chara HC) as [index [h1 [h11 [h12 h13]]]]; subst; try contradiction; fail).
 +
-  repeat breakAssumpt1.
+  (* repeat breakAssumpt1. *)
   destruct (eq_dec 
     (length (filter (fun x => isSomefalse (LiteralByPAssignment x a)) c))
     ((length c) - 1)
   ); try (right; intro HC; destruct (UnitClause_computable_chara HC) as [index [h1 [h11 [h12 h13]]]]; subst; try contradiction; fail).
-  left. exists i. subst.  exists h. unfold isNone in hf. repeat breakAssumpt1.
+  left. exists i. subst.  
+      destruct hhf as [h hf].
+      exists h. unfold isNone in hf. repeat breakAssumpt1.
       split; eauto.
       eapply (UnitClauseComputable1 a h). split; eauto.
 + right. intro HC. destruct HC as [index [h2 [h21 h22]]].
@@ -957,11 +977,10 @@ Theorem partition (f : A -> bool) (l : list A):
 
 
 
-
-
 Definition UnitClause_UnitLiteral {c a} (u : UnitClause c a) : Literal V.
-  destruct u as [i [h hh]].
-  exact (nthsafe i c h).
+  destruct u as [i hhh].
+  assert (i < length c) as hindex; [destruct hhh; auto | idtac].
+  exact (nthsafe i c hindex).
 Defined.
 
 
@@ -988,7 +1007,7 @@ Qed.
     AS ((l::c)::f) ((g,d[x := b]h) :: s).
 *)
 
-
+(* 
 Theorem UnitClause_AS_spec:
   forall  {c f g d s x b} (u : UnitClause c d),
     AS (c::f) ((g,d) :: s) -> 
@@ -1007,7 +1026,7 @@ assert (RProof
             (ClauseFormula c)) as Hproof2; [eauto | idtac].
 eapply rp_rconj; [exact Hproof2 | idtac].
 pose (AssignmentStackHasRProof H0) as hproof1. cbn in *. eauto.
-Qed.
+Qed. *)
 
 Lemma AS_no_nil:
   forall {f}, AS f nil -> False.
@@ -1025,8 +1044,7 @@ Definition HasUnitClause_in_st {f l} (st : CDCLState f l): Set.
   destruct st as [[ | [g d] s ] [astack]].
   destruct (AS_no_nil astack).
   exact {i & {h : i < length (l ++ f) & 
-  UnitClause (nthsafe i (l ++ f) h) d
-}}.
+  UnitClause (nthsafe i (l ++ f) h) d}}.
 Defined.
 
 
@@ -1047,7 +1065,7 @@ Defined.
 
 Lemma ToLiteralInjective:
   forall y,
-    {x & {b & y = ToLiteral x b}}.
+    {x & {b | y = ToLiteral x b}}.
   intro y. unfold ToLiteral. 
   destruct y as [v | v]; exists v; [
     exists true | exists false
@@ -1065,20 +1083,45 @@ Lemma nthsafe_nthdefault:
 Qed.
   
 
+
+Ltac repeat_extract_le_inf :=
+  match goal with 
+  | [h : exists _ : ?a < ?b, _ |- _] =>
+      let hname := fresh "h"
+      in assert (a < b) as hname;[destruct h; auto | idtac];
+      generalize h; clear h; 
+      repeat_extract_le_inf;
+      intro h
+  | _ => idtac
+  end.
+
+
+
+
+
+Ltac proof_irrelevance h1 h2:=
+  assert (h1 = h2);[eapply Coq.Logic.ProofIrrelevance.proof_irrelevance; eauto | idtac];
+  subst.
+
+
+
 Lemma UnitClause_AS_spec_in_st:
   forall  {f l}  (st : CDCLState f l),
     HasUnitClause_in_st st ->
-    {st2 : CDCLState f l & deducedLitNum st2 > deducedLitNum st}.
+    {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st}.
   intros f l [a [astack p]] h.
   destruct a as [hnil | [g d] t];
   try (destruct (AS_no_nil astack); fail); cbn in h.
-  destruct h as [i0 [hle [i1 [hle2 [huc0 huc1]]]]].
-  remember (nthsafe i1 (nthsafe i0 (l ++ f) hle) hle2) as targetL.
+  destruct h as [i0 [hle [i1 hl2huc0huc1 ]]].
+  repeat_extract_le_inf.
+  remember (nthsafe i1 (nthsafe i0 (l ++ f) hle) h) as targetL.
   remember (nthsafe i0 (l ++ f) hle) as targetC.
   destruct (ToLiteralInjective targetL) as [v [b htv]].
   assert (PA d v = None) as hdnvb. 
-  + unfold LiteralByPAssignment in huc0.
+  + destruct  hl2huc0huc1 as [hl2 [huc0 huc1]].
+    unfold LiteralByPAssignment in huc0.
     unfold ToLiteral in htv.
+    proof_irrelevance h hl2.
     repeat breakAssumpt1;
     destruct b; cbn in *; try (injection htv; intros; subst; eauto; try discriminate; fail);
     try discriminate.
@@ -1090,15 +1133,15 @@ Lemma UnitClause_AS_spec_in_st:
         eapply rp_rconj;[idtac | eapply AssignmentStackHasRProof; eauto].
         eapply rp_trans; [eapply rp_weaken; eauto | idtac].
         erewrite nthsafe_nthdefault; eauto.
+        destruct  hl2huc0huc1 as [hl2 [huc0 huc1]]. eauto.
     ++  eexists (existT _ ((g, d [v := b] hdnvb) :: t) (nextAS, p)).
         destruct d. cbn in *. lia.
 Qed.
     
-
 Theorem UnitClauseAsLiteral:
   forall  {c d} (u : UnitClause c d),
-    {x & {b & UnitClause_UnitLiteral u = ToLiteral x b}}.
-  intros c d [index [hle [hindex hu4]]].
+    {x & {b | UnitClause_UnitLiteral u = ToLiteral x b}}.
+  intros c d [index hlehindexhu4 ].
   cbn in *. apply ToLiteralInjective.
 Qed. 
 
@@ -1178,6 +1221,7 @@ Theorem NoUnitClause_computable: forall {f l} {st : CDCLState f l},
 Qed.
 
 
+
 Theorem HasUnitClause_Dec:
   forall {f l} (st : CDCLState f l),
     HasUnitClause_in_st st + {NoUnitClause st}.
@@ -1192,9 +1236,15 @@ Theorem HasUnitClause_Dec:
     end
   ) as ff.
   destruct (find_index ff (l++f)) as 
-  [[index [hle h2]] | hnonfound]; cbn in *.
-  + unfold ff in *. destruct (UnitClause_Dec (nthsafe index (l ++ f) hle) d); try discriminate; try contradiction.
-    left. exists index. exists hle. auto.
+  [[index hleh2] | hnonfound]; cbn in *;
+  repeat_extract_le_inf. 
+  + unfold ff in *.  
+    destruct (UnitClause_Dec (nthsafe index (l ++ f) h) d); try discriminate; try contradiction.
+    left. exists index. exists h. auto.
+    assert False; auto. destruct hleh2 as [hle h2]; try discriminate; try contradiction.
+    proof_irrelevance h hle.
+    destruct (UnitClause_Dec (nthsafe index (l ++ f) hle) d); try discriminate; try contradiction.
+
   + right. intros index hle2 H0.
   unfold ff in hnonfound. 
   clean_pose (hnonfound index hle2).
@@ -1552,7 +1602,7 @@ Theorem guess_new_literal_and_no_conflict {f l} (st: CDCLState f l) (hnnil : f <
   (h0: ~ SucceedState st /\ ~ ConflictingState st) :
   NoUnitClause st ->
   {l2 & {st2 : CDCLState f l2 | (deducedLitNum st2 > deducedLitNum st \/ length l2 > length l) /\ length l2 >= length l /\ ~ConflictingState st2}}.
-  
+intros.
 clean_pose (not_all_assigned3 _ h0). clear h0.
 destruct st as [a [astack hp]] eqn:heqst.
 destruct a as [_ | [ag ad] att];[try (destruct (AS_no_nil astack); auto; fail) | idtac].
@@ -1572,14 +1622,19 @@ pose (
   | _ => false
   end
 ) as f2.
-destruct (find_index f1 (l ++ f)) as [[index1 [hindex1 p1]] | hh].
-unfold f1 in p1. repeat breakAssumpt1.
-destruct (find_index f2 ((nthsafe index1 (l ++ f) hindex1))) as [[index2 [hindex2 p2]] | hh2].
-unfold f2 in p2. repeat breakAssumpt1.
-remember (nthsafe index2 (nthsafe index1 (l ++ f) hindex1) hindex2) as targetL.
+destruct (find_index f1 (l ++ f)) as [[index1 hindex1p1] | hh].
+unfold f1 in hindex1p1. repeat breakAssumpt1.
+repeat_extract_le_inf.
+destruct (find_index f2 ((nthsafe index1 (l ++ f) h0))) as [[index2 hindex2p2] | hh2].
+unfold f2 in hindex2p2. repeat breakAssumpt1.
+repeat_extract_le_inf.
+proof_irrelevance h0 h2.
+remember (nthsafe index2 (nthsafe index1 (l ++ f) h2) h1) as targetL.
 destruct (ToLiteralInjective targetL) as [x [b hxb]].
 
-erewrite  LiteralByPAssignmentNone_PANone in heq0; [idtac | eauto].
+assert (PA ad x = None) as heq0.
+destruct hindex2p2 as [hindex2 p2]; repeat breakAssumpt1. proof_irrelevance hindex2 h1.
+eapply  LiteralByPAssignmentNone_PANone; eauto. subst; eauto.
 clean_pose (AssignmentStackGSubD2 astack _ heq0).
 assert (AS (l ++ f) ((ag[x:=b]h0, ad[x:=b]heq0)::(ag, ad) :: att)) as nextStack.
 eapply guess_as. apply astack.
@@ -1593,6 +1648,9 @@ destruct ad. cbn in *. auto.
 
 + (* Contradictions happen here *)
 assert False;[idtac | try contradiction].
+
+destruct hindex1p1 as [hindex1 p1]; proof_irrelevance hindex1 h0.
+repeat breakAssumpt1.
 destruct (not_all_assigned2 heq) as [index2 [hindex2 hhindex2]].
 clean_pose (hh2 index2 hindex2). unfold f2 in *. repeat breakAssumpt1.
 + assert False;[idtac | try contradiction].
@@ -1608,7 +1666,6 @@ change_goal:
     RProof (CNFFormula f) (CNFFormula g) ->
     AssignmentStack f s.
 *)
-
 
 
 

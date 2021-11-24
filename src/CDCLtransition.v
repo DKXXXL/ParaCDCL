@@ -1760,7 +1760,7 @@ Qed.
 
 
 (* The main Procedure to be extract *)
-Fixpoint VanillaCDCLAlg  (fuel : nat) {f l: CNF V} (st : CDCLState f l) (h : f <> nil) {struct fuel}:  
+Fixpoint VanillaCDCLAlg'  (fuel : nat) {f l: CNF V} (st : CDCLState f l) (h : f <> nil) {struct fuel}:  
 {g | CNFByPAssignment f g =  Some true} 
 + RProof (CNFFormula f) fbot
 + {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2 /\ ~ ConflictingState st2  /\ (length l2 >= length l)}}. (* Progress on Learned! *)
@@ -1770,13 +1770,33 @@ destruct fuel eqn:heqnfuel; intros.
 + (* Some more Fuel*) 
 destruct (VanillaCDCLOneStep st h total_literal) as [hfinal | [l2 [st2 [hnfinal11 [hnfinal12 [hnfinal13 hnfinal14]]]]]].
 ++ left. apply hfinal.
-++ destruct (VanillaCDCLAlg n _ _ st2 h) as [hfinal3 | [l3 [st3 [hnfinal31 [hnfinal32 [hnfinal33 hnfinal34]]]]]].
+++ destruct (VanillaCDCLAlg' n _ _ st2 h) as [hfinal3 | [l3 [st3 [hnfinal31 [hnfinal32 [hnfinal33 hnfinal34]]]]]].
   +++ left. apply hfinal3.
   +++ right. exists l3. exists st3. split; auto. 
   destruct hnfinal31 as [hnfinal311 | hnfinal312];
   destruct hnfinal11 as [hnfinal111 | hnfinal112];
   try lia.
   repeat split; auto. try lia.
+Qed.
+
+
+
+(* The main Procedure to be extract *)
+Definition VanillaCDCLAlg  (fuel : nat) {f: CNF V}:  
+{g | CNFByPAssignment f g =  Some true} 
++ RProof (CNFFormula f) fbot
++ {l2 & {st2 : CDCLState f l2 |  ~ FinalState st2 /\ ~ ConflictingState st2}}. (* Progress on Learned! *)
+destruct f eqn:heqf.
++ (* f = nil*)
+  left. left. exists ∅. cbn in *; auto.
++ assert (f <> nil) as hneqnil;[intro Hcontra; subst; auto; try discriminate | idtac].
+  assert (CDCLState f nil) as initialState.
+  unfold CDCLState. cbn in *. exists ((∅,∅)::nil). split; [apply empty_as; auto | auto]. 
+  destruct (VanillaCDCLAlg' fuel initialState hneqnil) as [[h1 | h2 ]| h3]; subst.
+  ++ left. left.  subst. apply h1.
+  ++ left. right. auto.
+  ++ right. destruct h3 as [h31 [h32 h33]]. exists h31. exists h32. auto.
+      destruct h33 as [h331 [h332 [h333 h334]]]; auto.
 Qed.
 
 

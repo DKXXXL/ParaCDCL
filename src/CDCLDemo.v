@@ -1,14 +1,21 @@
 Require Import src.rproof.
 Require Import src.CDCLtransition.
+Require Import Coq.Unicode.Utf8.
 Require Import  Coq.Strings.String.
 Require Import  Coq.Lists.List.
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
+Require Import ExtrOcamlNatInt.
+
 Require Coq.extraction.Extraction.
 Extraction Language OCaml.
-
-
-
+Extract Inductive bool => "bool" [ "true" "false" ].
+Extract Inductive list => "list" [ "[]" "(::)" ].
+Extract Constant plus =>"( + )".
+Extract Constant mult => "( * )".
+Extract Constant eqb => "( = )".
+Extract Inductive sumbool => "bool" ["true" "false"].
+(* Extract Inductive string => "string" [ """""" "(fun a b -> (string_of_char a) ^ b)"] "(fun e c s -> if s = "" then e else c s.[0] (String.sub s 1 (String.length s - 1)))". *)
 Instance EqDec_eq_of_Str: EqDec_eq string.
 unfold EqDec_eq. 
 intros. eapply string_dec.
@@ -122,14 +129,27 @@ Open Scope string_scope.
  Import ListNotations.
 Definition VanillaCDCLAlg' := PrintVanillaCDCLAlg 2000.
 
-Example ex1:=
+
+
+(* Example ex1:=
 VanillaCDCLAlg' ([[p "a"; n "a"]]).
 
-Eval lazy in  ex1.
+Example ex2:=
+VanillaCDCLAlg' ([[p "a"]; [n "a"]]). *)
 
+Example Tests : list (CNF string) := [
+  [[p "a"; n "a"]];
+  [[p "a"]; [n "a"]];
+  [[p "a"; p "b"]; [n "a"]]
+
+].
+
+
+Example RunTests : list string :=
+  map VanillaCDCLAlg' Tests.
 
 End DemoExample.
 
 
-Extraction "CDCLCompute.ml" ex1.
+Extraction "tests/CDCLTests.ml" RunTests.
 

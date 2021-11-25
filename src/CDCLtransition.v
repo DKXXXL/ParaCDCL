@@ -10,8 +10,7 @@ Require Import Coq.Classes.EquivDec.
 Require Import Coq.Logic.Decidable.
 Require Import Coq.Lists.List.
 Require Import Coq.micromega.Lia.
-Require Coq.extraction.Extraction.
-Extraction Language OCaml.
+
 
 Open Scope type_scope.
 Open Scope list_scope.
@@ -1567,7 +1566,7 @@ Parameter backtracking :
 End CDCLHeuristics.
 
 
-Module CDCLMain (H : CDCLHeuristics).
+Module Main (H : CDCLHeuristics).
 
 
 Section CDCLtransitionNeedEqDec.
@@ -1703,7 +1702,7 @@ Qed.
 
 End CDCLtransitionNeedEqDec.
 
-End CDCLMain.
+End Main.
 
 
 End CDCLtransition.
@@ -1876,7 +1875,7 @@ End CDCLtransitionNeedEqDec.
 End VanillaCDCLHeur.
 
 
-Module Main := CDCLtransition.CDCLMain VanillaCDCLHeur.
+Module Main := CDCLtransition.Main VanillaCDCLHeur.
 
 
 

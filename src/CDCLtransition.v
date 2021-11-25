@@ -1296,43 +1296,6 @@ Qed.
 
 
 
-Theorem vanilla_backtracking_helper t:
-  forall {f} (stack : AS f t) {b g1 d1 t1},
-    CNFByPAssignment f ∅ = None ->
-    t = ((g1,d1)::t1) ->
-    CNFByPAssignment f d1 = Some b ->
-    {g2 & {d2 & {t2 & {a : AS f ((g2,d2)::t2) & CNFByPAssignment f d2 = None}}}}.
-induction t.
-+ intros f h. destruct (AS_no_nil h).
-+ intros f stack b g1 d1 t1 H0 H1 H2. 
-inversion H1; subst.
-destruct t1 as [_ | [t1g t1d] t1t].
-++ exists ∅. exists ∅. exists nil. exists (empty_as f). auto.
-++ 
-assert (AS f ((t1g, t1d) :: t1t)) as nextSearch; [eapply (AssignmentStackMonotoncity stack); eauto; try (intro; discriminate) | idtac].
-destruct (CNFByPAssignment f t1d) eqn:heqcnf.  
-    apply  (IHt _ nextSearch b0 _ _ _ H0 eq_refl). auto.
-    exists t1g. exists t1d. exists t1t. exists nextSearch. auto.
-Qed.
-
-
-
-Definition vanilla_backtracking:
-  forall {f l} (st : CDCLState f l), 
-  CNFByPAssignment (l ++ f) ∅ = None ->
-  ConflictingState st ->
-  {st2 : CDCLState f l | ~ ConflictingState st2}.
-
-intros f l [trail [astack p]] h0 h1.
-destruct trail as [_ | [g d] t];
-[try destruct (AS_no_nil astack) | idtac].
-cbn in *. 
-destruct (vanilla_backtracking_helper _ astack h0 eq_refl h1) as [g2 [d2 [t2 [astack2 h2]]]].
-exists (existT _ ((g2, d2) :: t2) (astack2, p)).
-cbn in *. rewrite h2. intro. try discriminate.
-Qed.
-
-
 
 
 (* UnitProp until cannot spec*)
@@ -1780,8 +1743,8 @@ Qed.
 
 
 
-Lemma vanilla_propagate_all_unit_clause_onestep:
-  forall {f l} (st : CDCLState f l), 
+Lemma vanilla_propagate_all_unit_clause_onestep {V : Set} `{EqDec_eq V}:
+  forall  {f l : CNF V} (st : CDCLState f l), 
   CountUnitClausesIn st <> 0 /\ ~ConflictingState st ->
   {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\ ~ConflictingState st2}
   + {st2 : CDCLState f l | ConflictingState st2}.
@@ -1802,7 +1765,7 @@ Qed.
 
 
 (* TODO Prove the termination of unit propagation *)
-Theorem vanilla_propagate_all_unit_clause
+Theorem vanilla_propagate_all_unit_clause {V : Set} `{EqDec_eq V}
     (fuel : nat): forall {f l} (st : CDCLState f l),
     {st2 : CDCLState f l | deducedLitNum st2 >= deducedLitNum st /\ NoUnitClause st2 /\ ~ConflictingState st2}
     + {st2 : CDCLState f l | ConflictingState st2}
@@ -1849,7 +1812,68 @@ Theorem vanilla_propagate_all_unit_clause
 
 Qed.
 
+Definition propagate_all_unit_clause:
+forall {V : Set} `{EqDec_eq V} (fuel : nat) {f l : CNF V} (st : CDCLState f l),
+{st2 : CDCLState f l | deducedLitNum st2 >= deducedLitNum st /\ NoUnitClause st2 /\ ~ConflictingState st2}
++ {st2 : CDCLState f l | ConflictingState st2}
++ {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\  ~ ConflictingState st2 }.
+
+intros. eapply (vanilla_propagate_all_unit_clause fuel st); eauto.
+Qed.
+
+Notation AS := AssignmentStack.
+
+
+Theorem vanilla_backtracking_helper {V : Set} `{EqDec_eq V} t  :
+  forall {f : CNF V} (stack : AS f t) {b g1 d1 t1},
+    CNFByPAssignment f ∅ = None ->
+    t = ((g1,d1)::t1) ->
+    CNFByPAssignment f d1 = Some b ->
+    {g2 & {d2 & {t2 & {a : AS f ((g2,d2)::t2) & CNFByPAssignment f d2 = None}}}}.
+induction t.
++ intros f h. destruct (AS_no_nil h).
++ intros f stack b g1 d1 t1 H0 H1 H2. 
+inversion H1; subst.
+destruct t1 as [_ | [t1g t1d] t1t].
+++ exists ∅. exists ∅. exists nil. exists (empty_as f). auto.
+++ 
+assert (AS f ((t1g, t1d) :: t1t)) as nextSearch; [eapply (AssignmentStackMonotoncity stack); eauto; try (intro; discriminate) | idtac].
+destruct (CNFByPAssignment f t1d) eqn:heqcnf.  
+    apply  (IHt _ nextSearch b0 _ _ _ H0 eq_refl). auto.
+    exists t1g. exists t1d. exists t1t. exists nextSearch. auto.
+Qed.
+
+
+
+Definition vanilla_backtracking  {V : Set} `{EqDec_eq V}:
+  forall {f l : CNF V} (st : CDCLState f l), 
+  CNFByPAssignment (l ++ f) ∅ = None ->
+  ConflictingState st ->
+  {st2 : CDCLState f l | ~ ConflictingState st2}.
+
+intros f l [trail [astack p]] h0 h1.
+destruct trail as [_ | [g d] t];
+[try destruct (AS_no_nil astack) | idtac].
+cbn in *. 
+destruct (vanilla_backtracking_helper _ astack h0 eq_refl h1) as [g2 [d2 [t2 [astack2 h2]]]].
+exists (existT _ ((g2, d2) :: t2) (astack2, p)).
+cbn in *. rewrite h2. intro. try discriminate.
+Qed.
+
+Definition backtracking :
+forall {V : Set} `{EqDec_eq V}  {f l : CNF V} (st : CDCLState f l), 
+  CNFByPAssignment (l ++ f) ∅ = None ->
+  ConflictingState st ->
+  {st2 : CDCLState f l | ~ ConflictingState st2}.
+
+intros. eapply vanilla_backtracking; eauto.
+Qed.
+
+
+
 End CDCLtransitionNeedEqDec.
+
+End VanillaCDCLHeur.
 
 
 

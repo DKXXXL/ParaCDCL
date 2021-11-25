@@ -1,2 +1,8 @@
 # ECE750-Project
-CDCL Algorithm
+Parametrized CDCL Algorithm
+
+***
+
+Use `make` to build the project.
+
+Run `./test.sh` to test three trivial cases solved.

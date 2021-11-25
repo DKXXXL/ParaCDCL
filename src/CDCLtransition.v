@@ -17,14 +17,18 @@ Open Scope type_scope.
 Open Scope list_scope.
 
 
-
 Module CDCLtransition.
 
 
+Section CDCLtransitionNeedEqDec.
 
 Context {V:Set}.
 
 Context {H: EqDec_eq V}.
+
+
+
+
 
 
 
@@ -47,7 +51,7 @@ The specfication for assignment stack is that
     RProof (fconj f g) d}
   holds all the time 
     *)
-Inductive AssignmentStack (f : CNF V) : 
+Inductive AssignmentStack  (f : CNF V) : 
   list (PAssignment V * PAssignment V) -> Set :=
   | empty_as : AssignmentStack f ((∅,∅)::nil)
   | guess_as : forall {g} {d} x b {s},
@@ -1574,22 +1578,46 @@ Definition CountLiteral (c : CNF V) :=
   The following three heuristic oriented function
   As long as the 
 *)
+End CDCLtransitionNeedEqDec.
+
+Module Type CDCLHeuristics.
+
 Parameter propagate_all_unit_clause:
-  forall (fuel : nat) {f l} (st : CDCLState f l),
+  forall {V : Set} `{EqDec_eq V} (fuel : nat) {f l : CNF V} (st : CDCLState f l),
 {st2 : CDCLState f l | deducedLitNum st2 >= deducedLitNum st /\ NoUnitClause st2 /\ ~ConflictingState st2}
 + {st2 : CDCLState f l | ConflictingState st2}
 + {st2 : CDCLState f l | deducedLitNum st2 > deducedLitNum st /\  ~ ConflictingState st2 }.
 
+
+
 Parameter conflicting_analysis:
-  forall {f l} (h : f <> nil) {st : CDCLState f l} 
+  forall {V : Set} `{EqDec_eq V}  {f l : CNF V} (h : f <> nil) {st : CDCLState f l} 
     (H0 :ConflictingState st),
     {l2 & {_: RProof (CNFFormula (l ++ f)) (CNFFormula l2) | l2 <> nil}}.
 
 Parameter backtracking :
-  forall {f l} (st : CDCLState f l), 
+  forall {V : Set} `{EqDec_eq V}  {f l : CNF V} (st : CDCLState f l), 
     CNFByPAssignment (l ++ f) ∅ = None ->
     ConflictingState st ->
     {st2 : CDCLState f l | ~ ConflictingState st2}.
+
+End CDCLHeuristics.
+
+
+Module CDCLMain (H : CDCLHeuristics).
+
+
+Section CDCLtransitionNeedEqDec.
+
+Context {V:Set}.
+
+Context {H: EqDec_eq V}.
+
+Import H.
+
+Hint Constructors AssignmentStack.
+
+Hint Constructors RProof.
 
 Definition CDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (suggest_fuel : nat):
 {g | CNFByPAssignment f g =  Some true} 
@@ -1710,9 +1738,13 @@ destruct f eqn:heqf.
       destruct h33 as [h331 [h332 [h333 h334]]]; auto.
 Qed.
 
+End CDCLtransitionNeedEqDec.
+
+End CDCLMain.
 
 
 End CDCLtransition.
+
 
 
 (* We implement the easiest  *)
@@ -1802,133 +1834,12 @@ Theorem vanilla_propagate_all_unit_clause
 
 Qed.
 
-Notation V:= CDCLtransition.V.
 
-(* One loop of Vanilla CDCL 
-    Which is basically DPLL anyway
-*)
-Definition VanillaCDCLOneStep {f l: CNF V} (st : CDCLState f l) (h : f <> nil) (suggest_fuel : nat):
-{g | CNFByPAssignment f g =  Some true} 
-+ RProof (CNFFormula f) fbot
-+ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2 /\ ~ ConflictingState st2  /\ (length l2 >= length l)}}. (* Progress on Learned! *)
-
-Ltac check_final_state_and_return st h:=
-  let hfinal := fresh "hfinal"
-  in let    H := fresh "H"
-  in destruct (FinalState_Dec2 st h) as [Hfinal | H]; [left; auto | idtac].
-
-  check_final_state_and_return st h.
- (* Main function starts here  *)
- (* First Do All the Unit Propagation *)
-    destruct (vanilla_propagate_all_unit_clause suggest_fuel st) as [[[st2 [hnuc [hnfail1 hnfail2]]] | [st2 hcflict]] | [st2 [hprog hnfail]]].
-    + (* If no conflict, and successfully propagate all *)
-      (* check fully assigned or not *)
-      destruct (SucceedState_Dec st2).
-        (* if it is fully assigned, then success extract*)
-        ++ left. left. eapply (SucceedSt_extract st2); auto. 
-        (* If it is not, 
-            guess a literal and progress. 
-            we know no conflict will happen, but we haven't proved it yet TODO!  *)
-        ++ destruct (guess_new_literal_and_no_conflict st2) as [l3 [st3 [hprog31 [hprog32 hprog33]]]].
-        unfold FinalState. auto. split; [idtac | auto]. intro HH. try contradiction. auto.
-        check_final_state_and_return st3 h.
-        right. exists l3. exists st3. repeat split; try auto.
-          destruct hprog31; [try lia | auto].
-    (* If conflict happens *)
-    + destruct (FailedState_Dec st2).
-      (* check if failure state *)
-          (* if failure, uses failure extract *)
-          ++ left. right. eapply (FailedSt_extract st2); auto.  
-          (* if not *)
-          ++
-             (*TODO we know here it is not final for st2
-                Because we can prove ConflictingState st2 -> ~ SucceedState st2.
-             *)
-            check_final_state_and_return st2 h.
-            (* Do conflict analysis to get a new learned clause *)
-            destruct (vanilla_conflicting_analysis h  hcflict) as [l2 [hl2 hl2n0]].
-            destruct (learn_CS_spec1 hl2 st2) as [st3 hst3info].
-            destruct (ConflictingState_Dec st3) as [hst3cflict | hst3ncflict].
-            +++ 
-              destruct (CNFByPAssignment ((l2 ++ l) ++ f) ∅) eqn:htrybacktrack.
-              destruct b. 
-              ++++ left. left. exists ∅. eapply EvalOnLess; eauto.
-              ++++ left. right. eapply rp_trans;[idtac | eapply rp_false_by_eval; eauto].
-                    destruct st2 as [a [b hp]].
-                    eapply rp_cnf_conj;[idtac| auto].
-                    eapply rp_cnf_conj;[idtac | auto].
-                    eapply rp_trans; [idtac | eapply hl2].
-                    eapply rp_cnf_conj; eauto.
-              ++++ destruct (vanilla_backtracking st3 htrybacktrack hst3cflict) as [st4 hncflict].
-            
-            (*TODO we know here it is not final for st4
-                Because we can make backtrack more strict --
-                make it return state s.t. CNFByPAssignment f 
-             *)
-            check_final_state_and_return st4 h.
-            right.
-            exists (l2 ++ l). exists st4.
-            repeat split; eauto. 
-            +++++ left. rewrite app_length. destruct (eq_dec (length l2) 0) as [ll20 | ll2n0]. 
-            assert (l2 = nil) as Hl2nil; [try eapply  length_zero_iff_nil; eauto | idtac]. try contradiction. lia. 
-            
-            +++++  rewrite app_length. lia.
-            +++ 
-            check_final_state_and_return st3 h.
-            right. exists (l2 ++ l). exists st3.
-            repeat split; eauto. 
-            ++++ left. rewrite app_length. destruct (eq_dec (length l2) 0) as [ll20 | ll2n0]. 
-            assert (l2 = nil) as Hl2nil; [try eapply  length_zero_iff_nil; eauto | idtac]. try contradiction. lia.
-            ++++  rewrite app_length. lia.
-+ check_final_state_and_return st2 h.
-  right.  exists l. exists st2.
-  repeat split; eauto.
-Qed. 
-            
-
-
-(* The main Procedure to be extract *)
-Fixpoint VanillaCDCLAlg'  (fuel : nat) {f l: CNF V} (st : CDCLState f l) (h : f <> nil) {struct fuel}:  
-{g | CNFByPAssignment f g =  Some true} 
-+ RProof (CNFFormula f) fbot
-+ {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2 /\ ~ ConflictingState st2  /\ (length l2 >= length l)}}. (* Progress on Learned! *)
-pose (CountLiteral (f ++ l)) as total_literal.
-destruct fuel eqn:heqnfuel; intros.
-+ apply (VanillaCDCLOneStep st h total_literal).
-+ (* Some more Fuel*) 
-destruct (VanillaCDCLOneStep st h total_literal) as [hfinal | [l2 [st2 [hnfinal11 [hnfinal12 [hnfinal13 hnfinal14]]]]]].
-++ left. apply hfinal.
-++ destruct (VanillaCDCLAlg' n _ _ st2 h) as [hfinal3 | [l3 [st3 [hnfinal31 [hnfinal32 [hnfinal33 hnfinal34]]]]]].
-  +++ left. apply hfinal3.
-  +++ right. exists l3. exists st3. split; auto. 
-  destruct hnfinal31 as [hnfinal311 | hnfinal312];
-  destruct hnfinal11 as [hnfinal111 | hnfinal112];
-  try lia.
-  repeat split; auto. try lia.
-Qed.
-
-
-
-(* The main Procedure to be extract *)
-Definition VanillaCDCLAlg  (fuel : nat) {f: CNF V}:  
-{g | CNFByPAssignment f g =  Some true} 
-+ RProof (CNFFormula f) fbot
-+ {l2 & {st2 : CDCLState f l2 |  ~ FinalState st2 /\ ~ ConflictingState st2}}. (* Progress on Learned! *)
-destruct f eqn:heqf.
-+ (* f = nil*)
-  left. left. exists ∅. cbn in *; auto.
-+ assert (f <> nil) as hneqnil;[intro Hcontra; subst; auto; try discriminate | idtac].
-  assert (CDCLState f nil) as initialState.
-  unfold CDCLState. cbn in *. exists ((∅,∅)::nil). split; [apply empty_as; auto | auto]. 
-  destruct (VanillaCDCLAlg' fuel initialState hneqnil) as [[h1 | h2 ]| h3]; subst.
-  ++ left. left.  subst. apply h1.
-  ++ left. right. auto.
-  ++ right. destruct h3 as [h31 [h32 h33]]. exists h31. exists h32. auto.
-      destruct h33 as [h331 [h332 [h333 h334]]]; auto.
-Qed.
 
 
 
 End VanillaCDCL.
+
+
 
 (* Extraction "CDCLCompute.ml" VanillaCDCLAlg. *)

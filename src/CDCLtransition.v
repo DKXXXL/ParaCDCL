@@ -1672,7 +1672,7 @@ Qed.
 
 
 (* The multi-step CDCL Alg *)
-Fixpoint CDCLMultiStepAlg  (fuel : nat) {f l: CNF V} (st : CDCLState f l) (h : f <> nil) {struct fuel}:  
+Fixpoint CDCLMultiStep  (fuel : nat) {f l: CNF V} (st : CDCLState f l) (h : f <> nil) {struct fuel}:  
 {g | CNFByPAssignment f g =  Some true} 
 + RProof (CNFFormula f) fbot
 + {l2 & {st2 : CDCLState f l2 | (length l2 > length l \/ deducedLitNum st2 > deducedLitNum st) /\ ~ FinalState st2 /\ ~ ConflictingState st2  /\ (length l2 >= length l)}}. (* Progress on Learned! *)
@@ -1682,7 +1682,7 @@ destruct fuel eqn:heqnfuel; intros.
 + (* Some more Fuel*) 
 destruct (CDCLOneStep st h total_literal) as [hfinal | [l2 [st2 [hnfinal11 [hnfinal12 [hnfinal13 hnfinal14]]]]]].
 ++ left. apply hfinal.
-++ destruct (CDCLMultiStepAlg n _ _ st2 h) as [hfinal3 | [l3 [st3 [hnfinal31 [hnfinal32 [hnfinal33 hnfinal34]]]]]].
+++ destruct (CDCLMultiStep n _ _ st2 h) as [hfinal3 | [l3 [st3 [hnfinal31 [hnfinal32 [hnfinal33 hnfinal34]]]]]].
   +++ left. apply hfinal3.
   +++ right. exists l3. exists st3. split; auto. 
   destruct hnfinal31 as [hnfinal311 | hnfinal312];
@@ -1703,7 +1703,7 @@ destruct f eqn:heqf.
 + assert (f <> nil) as hneqnil;[intro Hcontra; subst; auto; try discriminate | idtac].
   assert (CDCLState f nil) as initialState.
   unfold CDCLState. cbn in *. exists ((∅,∅)::nil). split; [apply empty_as; auto | auto]. 
-  destruct (CDCLMultiStepAlg fuel initialState hneqnil) as [[h1 | h2 ]| h3]; subst.
+  destruct (CDCLMultiStep fuel initialState hneqnil) as [[h1 | h2 ]| h3]; subst.
   ++ left. left.  subst. apply h1.
   ++ left. right. auto.
   ++ right. destruct h3 as [h31 [h32 h33]]. exists h31. exists h32. auto.
@@ -1716,13 +1716,9 @@ End CDCLtransition.
 
 
 (* We implement the easiest  *)
-Section VanillaCDCL.
+Module VanillaCDCL.
 
-
-Context {V:Set}.
-
-Context {H: EqDec_eq V}.
-
+Import CDCLtransition.
 
   
 Definition vanilla_conflicting_analysis:
@@ -1806,6 +1802,7 @@ Theorem vanilla_propagate_all_unit_clause
 
 Qed.
 
+Notation V:= CDCLtransition.V.
 
 (* One loop of Vanilla CDCL 
     Which is basically DPLL anyway
@@ -1932,19 +1929,6 @@ Qed.
 
 
 
-(* Now we need to really model
-    all possible (non-deterministic) transition
-      inside (CDCL f) world
-    using 
-      the above 5 specification functions
-  and then prove the transition above will give
-    some good property on termination
-*)
-
-(*
- Full 
-*)
-
-
+End VanillaCDCL.
 
 (* Extraction "CDCLCompute.ml" VanillaCDCLAlg. *)

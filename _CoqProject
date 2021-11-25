@@ -1,4 +1,5 @@
 -Q ./src  "src"
+-Q ./tests "tests"
 ./src/rproof.v
 ./src/CDCLtransition.v
-
+./tests/CDCLDemo.v

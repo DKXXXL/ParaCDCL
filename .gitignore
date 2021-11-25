@@ -13,3 +13,4 @@ CoqMakefile.conf
 *.cmi
 *.cache
 testCDCL
+tests/CDCLTests.ml

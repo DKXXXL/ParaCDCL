@@ -70,8 +70,8 @@ Instance showBool : Show bool :=
 {
   show := fun x =>
     match x with
-    | true => "⊤"
-    | false => "⊥"
+    | true => "T"
+    | false => "F"
     end
 }.
 
@@ -112,8 +112,8 @@ destruct (VanillaCDCLAlg fuel f) as [[result1 | noresult] | noresult].
 
 + destruct result1 as [pa h].
   exact (show pa).
-+ exact (append (show f) (append "⊢"  "⊥")).
-+ exact ("Cannot Finish").
++ exact (append (show f) " |- Bottom").
++ exact ("Cannot Finish Computing in these fuel").
 Qed.  
 
 
@@ -130,13 +130,6 @@ Open Scope string_scope.
 Definition VanillaCDCLAlg' := PrintVanillaCDCLAlg 2000.
 
 
-
-(* Example ex1:=
-VanillaCDCLAlg' ([[p "a"; n "a"]]).
-
-Example ex2:=
-VanillaCDCLAlg' ([[p "a"]; [n "a"]]). *)
-
 Example Tests : list (CNF string) := [
   [[p "a"; n "a"]];
   [[p "a"]; [n "a"]];
@@ -146,7 +139,12 @@ Example Tests : list (CNF string) := [
 
 
 Example RunTests : list string :=
-  map VanillaCDCLAlg' Tests.
+  map (fun x => 
+        (append 
+          (show x)
+          (append 
+            " ===> "  
+            (VanillaCDCLAlg' x)))) Tests.
 
 End DemoExample.
 

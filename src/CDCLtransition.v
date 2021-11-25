@@ -1752,9 +1752,14 @@ Module VanillaCDCL.
 
 Import CDCLtransition.
 
+Module VanillaCDCLHeur <: CDCLHeuristics.
+
+Section CDCLtransitionNeedEqDec.
   
+
+
 Definition vanilla_conflicting_analysis:
-  forall {f l} (h : f <> nil) {st : CDCLState f l} 
+  forall {V:Set} `{EqDec_eq V} {f l : CNF V} (h : f <> nil) {st : CDCLState f l} 
     (H0 :ConflictingState st),
     {l2 & {_: RProof (CNFFormula (l ++ f)) (CNFFormula l2) | l2 <> nil}}.
   unfold ConflictingState.
@@ -1764,6 +1769,16 @@ Definition vanilla_conflicting_analysis:
   eexists (rp_cnf_false_neg _); eauto. intro. try discriminate.
   Unshelve. auto.
 Qed.
+
+Definition conflicting_analysis:
+forall {V : Set} `{EqDec_eq V}  {f l : CNF V} (h : f <> nil) {st : CDCLState f l} 
+    (H0 :ConflictingState st),
+    {l2 & {_: RProof (CNFFormula (l ++ f)) (CNFFormula l2) | l2 <> nil}}.
+intros.
+    eapply vanilla_conflicting_analysis; eauto. 
+Qed.
+
+
 
 Lemma vanilla_propagate_all_unit_clause_onestep:
   forall {f l} (st : CDCLState f l), 
@@ -1833,6 +1848,8 @@ Theorem vanilla_propagate_all_unit_clause
     (* NOT Failure yet, check if it has any more unit clause*)
 
 Qed.
+
+End CDCLtransitionNeedEqDec.
 
 
 

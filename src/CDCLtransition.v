@@ -1875,7 +1875,6 @@ End CDCLtransitionNeedEqDec.
 
 End VanillaCDCLHeur.
 
-Print CDCLtransition.CDCLMain.
 
 Module Main := CDCLtransition.CDCLMain VanillaCDCLHeur.
 

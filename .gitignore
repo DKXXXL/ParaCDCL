@@ -7,3 +7,9 @@
 Makefile.coq
 CoqMakefile.conf
 *.json
+*.cmx
+*.mli
+*.o
+*.cmi
+*.cache
+testCDCL

@@ -148,7 +148,19 @@ Example Tests : list (CNF string) := [
   [[n "b"]; [p "b"; n "b"]];
   [[n "b"; p "a"; n "a"]; [n "b"; p "a"; n "a"]; [n "a"]];
   [[n "a"; p "b"]; [n "b"; p "c"]];
-  
+  [[n "a"; p "a"]; [p "c"; p "a"]; [n "c"]; [p "c"; n "b"]; [n "a"]; [n "c"; p "a"]];
+
+  (* Random Small 2 *)
+  [[p "a"]; [p "a"]; [n "b"; p "a"; p "b"]; [n "b"]; [n "b"; n "c"; p "b"; n "a"]; [p "a"]];
+  [[n "a"; n "c"]; [n "a"; p "b"]; [p "b"]; [p "d"]];
+  [[p "a"; p "b"]; [n "a"; n "b"; p "a"]; [p "a"; p "c"]; [p "a"; p "b"; p "c"]; [n "b"; p "a"; n "a"]; [n "a"]; [n "b"; n "c"; p "a"; n "d"]; [p "c"]; [n "b"; n "a"]; [n "a"]];
+  [[p "a"; p "e"]; [n "a"; n "b"]; [n "b"; p "a"; p "b"]; [n "d"]; [n "f"]; [n "b"; n "d"; p "b"]];
+  [[p "a"; n "d"; p "b"]; [p "b"]; [p "a"]; [n "a"]];
+  [[p "c"]; [p "a"; p "b"; p "f"]; [n "c"; p "b"]; [n "a"; p "a"]; [n "c"]];
+  [[n "a"]; [n "b"; n "c"; p "d"]; [n "b"; p "a"]; [p "a"; p "c"]; [n "c"; p "c"]; [n "a"; p "a"]; [n "b"; p "c"]];
+  [[n "b"; p "a"; p "c"; p "d"]; [p "d"]; [n "b"]; [p "b"; p "c"]];
+  [[n "a"; p "a"]; [n "d"; p "a"]; [p "a"]; [n "a"; n "c"]; [n "a"; p "b"]; [p "a"; p "b"; p "c"]; [n "a"; n "b"; n "c"; p "b"]; [n "b"; p "a"; n "a"]; [n "c"; p "a"]; [p "a"]];
+  [[n "a"; p "c"]; [n "a"; n "b"; p "a"]; [n "a"; p "c"]; [p "b"]; [n "b"; p "b"]; [n "b"; p "a"]; [n "b"; p "b"]; [n "b"]; [n "a"; n "c"]];
   (* Random Larger : poisson(3) + 1 *)
   [[p "b"; n "e"; n "c"; n "d"; n "b"]; [p "d"; p "c"; p "b"; p "f"; n "c"]; [p "d"; p "c"; n "d"; n "b"; n "a"; p "i"]; [n "h"; p "a"; n "f"]; [p "d"; n "b"]; [p "c"; p "b"; n "e"; n "c"; n "b"]];
 [[p "d"; n "d"; n "f"]; [p "d"; n "d"; n "c"]; [p "d"; p "c"; n "e"; p "f"; n "d"; n "c"]; [p "d"]; [p "d"; p "c"; n "e"; p "e"; n "b"]; [n "e"; n "d"; n "b"]];

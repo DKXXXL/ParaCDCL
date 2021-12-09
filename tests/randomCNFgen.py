@@ -32,6 +32,10 @@ class negative():
           return False
 
 alphabet = " abcdefghijklmnopqrstuvwxyz"
+
+varseed = 1
+clauselenseed = 1
+cnflenseed=6
 # def genNum():
 #   r = 1
 #   while True:
@@ -39,12 +43,12 @@ alphabet = " abcdefghijklmnopqrstuvwxyz"
 #     if (n == r+1) and (r < len(alphabet)-1):
 #       r = r + 1
 #     yield n+1
-def genNum():
+def genNum(seed = 2):
   while True:
-    yield st.poisson.rvs(5)+1
+    yield st.poisson.rvs(seed)+1
 
 def genVar():
-  stream = genNum()
+  stream = genNum(varseed)
   for n in stream:
     yield alphabet[n]
 
@@ -58,16 +62,14 @@ def genLit():
 
 
 def genCla():
-  for each_length in genNum():
-    each_length = each_length+1
+  for each_length in genNum(clauselenseed):
     ret = set(map(lambda x: x[1],
                zip(range(each_length),genLit())))
     yield list(ret)
     
 
 def genCNF():
-  for each_length in genNum():
-    each_length = each_length+1
+  for each_length in genNum(cnflenseed):
     yield list(map(lambda x: x[1],
                zip(range(each_length),genCla())))
 

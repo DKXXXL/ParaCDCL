@@ -1,8 +1,8 @@
-# ECE750-Project
+# Parametrized CDCL in Coq
 Parametrized CDCL Algorithm
 
 ***
 
 Use `make` to build the project.
 
-Run `./test.sh` to test three trivial cases solved.
+Run `./test.sh` to test several trivial cases solved.

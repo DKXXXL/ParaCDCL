@@ -1,0 +1,32 @@
+opam-version: "2.0"
+maintainer: ""
+version: ""
+
+homepage: ""
+dev-repo: ""
+bug-reports: ""
+license: "MIT"
+
+synopsis: ""
+description: """
+ParaCDCL
+"""
+
+build: [
+  ["sh" "-c" "coq_makefile -f _CoqProject -o Makefile"]
+  [make "-j%{jobs}%"]
+]
+install: [make "install"]
+
+run-test: [make "test"]
+
+depends: [
+  "ocaml" {>= "4.13.1"}
+  "coq" {(= "8.15.1")}
+]
+
+tags: [
+]
+authors: [
+  ""
+]

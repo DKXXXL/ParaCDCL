@@ -12,7 +12,7 @@ jobs:
         coq_version:
           - '8.15'
         ocaml_version: 
-          - '4.07-flambda'
+          - 'default'
 
     steps:
       - uses: actions/checkout@v2

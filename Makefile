@@ -1,22 +1,17 @@
-# Makefile originally taken from coq-club
+ifeq "$(COQBIN)" ""
+  COQBIN=$(dir $(shell which coqtop))/
+endif
 
-%: Makefile.coq phony
-	+make -f Makefile.coq $@
+%: Makefile.coq
 
-all: Makefile.coq
-	+make -f Makefile.coq all
+Makefile.coq: _CoqProject
+	$(COQBIN)coq_makefile -f _CoqProject -o Makefile.coq
 
-clean: Makefile.coq
-	+make -f Makefile.coq clean
-	rm -f Makefile.coq
+tests: all
+	@$(MAKE) -C tests -s clean
+	@$(MAKE) -C tests -s all
 
-Makefile.coq: _CoqProject Makefile
-	coq_makefile -f _CoqProject | sed 's/$$(COQCHK) $$(COQCHKFLAGS) $$(COQLIBS)/$$(COQCHK) $$(COQCHKFLAGS) $$(subst -Q,-R,$$(COQLIBS))/' > Makefile.coq
+-include Makefile.coq
 
-_CoqProject: ;
-
-Makefile: ;
-
-phony: ;
-
-.PHONY: all clean phony
+# clean::
+# 	rm -f Makefile.coq Makefile.coq.bak Makefile.coq.conf

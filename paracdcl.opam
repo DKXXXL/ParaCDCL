@@ -22,7 +22,7 @@ run-test: [make "test"]
 
 depends: [
   "ocaml" {>= "4.13.1"}
-  "coq" {(= "8.15.1")}
+  "coq" {(>= "8.15")}
 ]
 
 tags: [
